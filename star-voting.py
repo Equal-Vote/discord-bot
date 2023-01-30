@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 discord_token = os.getenv('DISCORD_TOKEN')
+jwt_secret_key = os.getenv('JWT_SECRET_KEY')
 jwt_token = os.getenv('JWT_TOKEN')
 
 # The guild in which this slash command will be registered.
@@ -499,11 +500,17 @@ async def new_star_election(ctx: commands.Context, *args):
                      }
                    }
     race_list = [new_race_obj]
+    new_authentication_obj = {
+                               "authentication":
+                               {
+                                   "email": "true"
+                               }
+                             }
     new_election_settings_obj = {
-                                  "ElectionSettings":
+                                  "settings":
                                   {
-                                      "election_roll_type": "none",
-                                      "voter_id_type": "predefined voter ID"
+                                      "voter_access": "open",
+                                      "voter_authentication": new_authentication_obj
                                   }
                                 }
     new_election_obj = {
@@ -511,13 +518,15 @@ async def new_star_election(ctx: commands.Context, *args):
                           {
                             "title": election_name,
                             "owner_id": str(election_creator_id),
-                            "state": "dev testing",
+                            "state": "draft",
                             "races": race_list,
-                            "settings": new_election_settings_obj
+                            "settings": new_election_settings_obj,
+                            "auth_key": jwt_secret_key
                           }
                        }
 
-    response = requests.post(URL, json = new_election_obj, cookies = {"id_token": jwt_token})
+    # need to create a separate token for every user that votes, but those tokens don't need to be stored.
+    response = requests.post(URL, json = new_election_obj, cookies = {"custom_id_token": jwt_token})
     print("response.url: " + response.url + "\n")
     print("response.status_code: " + str(response.status_code) + "\n")
     print("response.text: " + response.text + "\n")
