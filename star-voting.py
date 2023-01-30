@@ -9,6 +9,8 @@ from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
 
+import json
+
 load_dotenv()
 discord_token = os.getenv('DISCORD_TOKEN')
 jwt_secret_key = os.getenv('JWT_SECRET_KEY')
@@ -17,6 +19,8 @@ jwt_token = os.getenv('JWT_TOKEN')
 # The guild in which this slash command will be registered.
 # It is recommended to have a test guild to separate from your "production" bot
 TEST_GUILD = discord.Object(id=918037457277161492)
+
+
 
 
 class CandidateScorecardView(discord.ui.View):
@@ -160,17 +164,10 @@ class EmbedEdit(discord.ui.View):
 
     @discord.ui.button(label='Edit Candidates', style=discord.ButtonStyle.blurple,
                        custom_id='persistent_view:editcandidates1')
-    async def editcandidates1(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def editcandidates(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Need to make sure only the creator can edit the embed.
         # if (interaction.user == message.user):
-        await interaction.response.send_modal(STARVotingCandidateEdit())
-
-    @discord.ui.button(label='Edit Candidates 2', style=discord.ButtonStyle.blurple,
-                       custom_id='persistent_view:editcandidates2')
-    async def editcandidates2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Need to make sure only the creator can edit the embed.
-        # if (interaction.user == message.user):
-        await interaction.response.send_modal(STARVotingCandidateEdit())
+        await interaction.response.send_modal(STARVotingCandidateNameEdit())
 
 
 class STARVotingElectionSetup(discord.ui.Modal, title='New STAR Voting Election'):
@@ -232,6 +229,9 @@ class STARVotingDescriptionEdit(discord.ui.Modal, title='Edit the Description'):
     # default=defaultText,
 
     async def on_submit(self, interaction: discord.Interaction):
+        URL = "https://star-vote.herokuapp.com/API/Elections"
+        election = requests.get(URL)
+        response = requests.post(URL, json = new_election_obj, cookies = {"custom_id_token": jwt_token})
         await interaction.response.send_message('Starting a new election...', ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -301,6 +301,58 @@ class STARVotingCandidateEdit(discord.ui.Modal, title='Edit the Candidates'):
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.send_message('Starting a new election...', ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
+
+        # Make sure we know what the error actually is
+        traceback.print_tb(error.__traceback__)
+
+class STARVotingCandidateNameEdit(discord.ui.Modal, title='Edit Candidates Names'):
+    descriptionEditBox = discord.ui.TextInput(
+        label='Candidates',
+        placeholder='Harry Potter, Ron Weasley, Hermione Granger, Draco Malfoy, Hedwig',
+        style=TextStyle.long,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        election_id = None
+        # Get the election ID that was saved to the embed by getting the embed from the history of this channel.
+        messages = [mess async for mess in interaction.message.channel.history(limit=3)]
+        for message in messages:
+            for embed in message.embeds:
+                for field in embed.fields:
+                    if field.name == "Election ID":
+                        election_id = field.value
+                        break
+
+        # Add the election ID to the URL so that we can send the correct get request.
+        URL = "https://star-vote.herokuapp.com/API/Election/"
+        URL += str(election_id)
+        # Get the election from star-vote.
+        draft_election_response = requests.get(URL, cookies = {"custom_id_token": jwt_token})
+
+        # Display all the election data.
+        print("\ndraft_election_response")
+        print(draft_election_response)
+        print("\ndraft_election_response.text")
+        print(draft_election_response.text)
+        draft_election_json = json.loads(draft_election_response.text)
+        draft_election_response_election = draft_election_json["election"]
+        print("\ndraft_election_response_election")
+        print(draft_election_response_election)
+        draft_election_response_races = draft_election_response_election["races"]
+        print("\ndraft_election_response_races")
+        print(draft_election_response_races)
+        draft_election_response_race = draft_election_response_races[0]
+        print("\ndraft_election_response_race")
+        print(draft_election_response_race)
+        draft_election_response_candidates = draft_election_response_race["candidates"]
+        print("\ndraft_election_response_candidates")
+        print(draft_election_response_candidates)
+
+        # Send a message to the person who edited the candidates with the values they provided.
+        await interaction.response.send_message(f'Starting a new election... {self.descriptionEditBox}', ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
@@ -400,6 +452,7 @@ def prettify_candidates(candidate: tuple) -> str:
 async def new_star_embed(ctx: commands.Context, *args):
     """Creates an embed for a STAR voting election.
         Arguments:
+            ElectionID: The ID of the election that STAR Vote generates.
             ElectionTitle: Title of the election. (e.g. NewElection or "New Election")
             Days: Number of days the election will last.
             Candidates: As many candidates as you want. (e.g. JaneDoe or "Jane Doe")
@@ -407,14 +460,16 @@ async def new_star_embed(ctx: commands.Context, *args):
             .star "What is the best color?" 5 Blue Red Green Yellow Purple Orange
     """
     # The first argument should be the election title.
-    electionTitle = args[0]
+    electionID = args[0]
+    # The first argument should be the election title.
+    electionTitle = args[1]
     # Get how many days the STAR Voting election will last and set an end date.
     now = datetime.datetime.now()
-    days = int(args[1])
+    days = int(args[2])
     endDate = now + datetime.timedelta(days)
     endDate = endDate.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
     # Set the candidates into their own variable.
-    candidateTuple = args[2:]
+    candidateTuple = args[3:]
     # stuff that wasn't working idk
     #candidateTuple = ()
     #for candidate in args[2:]:
@@ -447,6 +502,7 @@ async def new_star_embed(ctx: commands.Context, *args):
     embedVar.add_field(name="🟣 Purple Party", value=f"> {candidates}", inline=True)
     vote_count = 0
     embedVar.add_field(name="Current Vote Count:", value=vote_count, inline=False)
+    embedVar.add_field(name="Election ID", value=electionID, inline=False)
 
     # Set the large image that displays.
     image_simple_ballot = "https://d3n8a8pro7vhmx.cloudfront.net/unifiedprimary/pages/494/attachments/original/1632368538/STAR_Ballot.jpg?1632368538"
@@ -524,7 +580,10 @@ async def new_star_election(ctx: commands.Context, *args):
     print("response.text: " + response.text + "\n")
     print("\n\n")
 
-    await new_star_embed(ctx, election_name, days, candidates)
+    response_data = json.loads(response.text)
+    election_id = response_data["election"]["election_id"]
+
+    await new_star_embed(ctx, election_id, election_name, days, candidates)
 
 @bot.command()
 @commands.is_owner()
