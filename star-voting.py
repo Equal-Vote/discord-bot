@@ -426,7 +426,7 @@ async def new_star_embed(ctx: commands.Context, *args):
     # Using block quotes via "> " or ">>> " looks nice so maybe use it for the formatting of values.
 
     # Create the instructions for the embed.
-    star_voting_instructions = "See the image below for instructions \non how a STAR voting election works! " \
+    star_voting_instructions = "Click on the image below for instructions \non how a STAR voting election works! " \
                                "\nThen click on Vote and fill out your ballot!"
     embedVar = discord.Embed(
         title=electionTitle, description=star_voting_instructions,
@@ -488,30 +488,22 @@ async def new_star_election(ctx: commands.Context, *args):
     candidate_list = []
     for candidate in candidates:
         print("Candidate: " + candidate)
-        new_candidate_obj = { "Candidate": { "candidate_name": candidate}}
+        new_candidate_obj = { "candidate_name": candidate}
         candidate_list.append(new_candidate_obj)
     new_race_obj = {
-                     "Race":
-                     {
                        "title": election_name,
                        "voting_method": "STAR",
                        "num_winners": 1,
                        "candidates": candidate_list
-                     }
                    }
     race_list = [new_race_obj]
     new_authentication_obj = {
-                               "authentication":
-                               {
-                                   "email": "true"
-                               }
+                                 "voter_id": False,
+                                 "email": True
                              }
     new_election_settings_obj = {
-                                  "settings":
-                                  {
-                                      "voter_access": "open",
-                                      "voter_authentication": new_authentication_obj
-                                  }
+                                    "voter_access": "open",
+                                    "voter_authentication": new_authentication_obj
                                 }
     new_election_obj = {
                           "Election":
