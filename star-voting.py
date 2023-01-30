@@ -3,13 +3,15 @@ import datetime
 import os
 import traceback
 
+import requests
 import discord
 from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
-token = os.getenv('TOKEN')
+discord_token = os.getenv('DISCORD_TOKEN')
+jwt_token = os.getenv('JWT_TOKEN')
 
 # The guild in which this slash command will be registered.
 # It is recommended to have a test guild to separate from your "production" bot
@@ -18,12 +20,14 @@ TEST_GUILD = discord.Object(id=918037457277161492)
 
 class CandidateScorecardView(discord.ui.View):
     def __init__(self):
+        self.score_chosen = -1
         super().__init__(timeout=None)
 
     @discord.ui.button(label='0', style=discord.ButtonStyle.grey, custom_id='persistent_view:0')
     async def zero(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 0
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -32,6 +36,7 @@ class CandidateScorecardView(discord.ui.View):
     async def one(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 1
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -40,6 +45,7 @@ class CandidateScorecardView(discord.ui.View):
     async def two(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 2
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -48,6 +54,7 @@ class CandidateScorecardView(discord.ui.View):
     async def three(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 3
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -56,6 +63,7 @@ class CandidateScorecardView(discord.ui.View):
     async def four(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 4
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -64,8 +72,18 @@ class CandidateScorecardView(discord.ui.View):
     async def five(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 5
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Prev', style=discord.ButtonStyle.grey, custom_id='persistent_view:prev')
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Make sure to update the message with our updated selves
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.grey, custom_id='persistent_view:next')
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(view=self)
 
     def reset_all_buttons(self):
@@ -87,12 +105,12 @@ class SubmitBallotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label='Submit', style=discord.ButtonStyle.green, custom_id='persistent_view:green')
+    @discord.ui.button(label='Submit Ballot 🗳', style=discord.ButtonStyle.green, custom_id='persistent_view:submit_ballot')
     async def submitballot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Ballot submitted :)")
+        await interaction.response.send_message("Ballot submitted to the void :)", ephemeral=True)
 
 
-class BallotView(discord.ui.View):
+class BallotView(discord.ui.View, ):
     def __init__(self):
         super().__init__(timeout=None)
 
@@ -103,9 +121,22 @@ class EmbedVote(discord.ui.View):
 
     @discord.ui.button(label='Vote', style=discord.ButtonStyle.green, custom_id='persistent_view:vote')
     async def vote(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Make sure to update the message with our updated selves
-        await interaction.response.send_message("Score these candidates on a 0 to 5 scale.\nCandidate Name",
-                                                view=BallotView(), ephemeral=True)
+        message_sent = await interaction.send("```candidate_name\n```", ephemeral=True)
+        #await interaction.response.send_message(view=CandidateScorecardView(), ephemeral=True)
+        #await interaction.followup.send("Complete your ballot by clicking the emoji corresponding to the score you would give the candidate.")
+        #for candidate in args:
+        #    message_sent = await ctx.send(candidate)
+        #    await message_sent.add_reaction('0️⃣')
+        #    await message_sent.add_reaction('1️⃣')
+        #    await message_sent.add_reaction('2️⃣')
+        #    await message_sent.add_reaction('3️⃣')
+        #    await message_sent.add_reaction('4️⃣')
+        #    await message_sent.add_reaction('5️⃣')
+        #await interaction.response.send_message("Score these candidates on a 0 to 5 scale.\nCandidate Name",
+        #                                        view=CandidateScorecardView(), ephemeral=True)
+        # Webhooks
+        #await interaction.followup.send("Score these candidates on a 0 to 5 scale.\nCandidate Name",
+        #                                view=CandidateScorecardView(), ephemeral=True)
 
 
 class EmbedEdit(discord.ui.View):
@@ -365,13 +396,13 @@ def prettify_candidates(candidate: tuple) -> str:
 
 @bot.command()
 @commands.is_owner()
-async def star(ctx: commands.Context, *args):
+async def new_star_embed(ctx: commands.Context, *args):
     """Creates an embed for a STAR voting election.
-        args:
-            ElectionTitle: Title of the election
+        Arguments:
+            ElectionTitle: Title of the election. (e.g. NewElection or "New Election")
             Days: Number of days the election will last.
-            Candidates: As many candidates as you want. Using both firstname and lastname requires "Jane Doe"
-        example:
+            Candidates: As many candidates as you want. (e.g. JaneDoe or "Jane Doe")
+        Example:
             .star "What is the best color?" 5 Blue Red Green Yellow Purple Orange
     """
     # The first argument should be the election title.
@@ -383,6 +414,10 @@ async def star(ctx: commands.Context, *args):
     endDate = endDate.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
     # Set the candidates into their own variable.
     candidateTuple = args[2:]
+    # stuff that wasn't working idk
+    #candidateTuple = ()
+    #for candidate in args[2:]:
+    #    candidateTuple = (candidateTuple + candidate)
     candidates = str(candidateTuple)
     # Pretty print the candidates
     #candidates_prettified = prettify_candidates(candidates)
@@ -409,8 +444,8 @@ async def star(ctx: commands.Context, *args):
     embedVar.add_field(name="🟢 Green Party", value=f"> {candidates}", inline=True)
     embedVar.add_field(name="🔵 Blue Party", value=f"> {candidates}", inline=True)
     embedVar.add_field(name="🟣 Purple Party", value=f"> {candidates}", inline=True)
-
-    embedVar.add_field(name="Current Vote Count:", value="#ofvotes", inline=False)
+    vote_count = 0
+    embedVar.add_field(name="Current Vote Count:", value=vote_count, inline=False)
 
     # Set the large image that displays.
     image_simple_ballot = "https://d3n8a8pro7vhmx.cloudfront.net/unifiedprimary/pages/494/attachments/original/1632368538/STAR_Ballot.jpg?1632368538"
@@ -434,10 +469,115 @@ async def star(ctx: commands.Context, *args):
     # ctx.author.guild_avatar displays as None if you don't have a server specific picture.
     embedVar.set_footer(text=f"Election created by {ctx.author.display_name}")
 
+    print("New STAR Embed Created at " + endDate)
     await ctx.send(embed=embedVar)
     await ctx.send(view=EmbedEdit(), ephemeral=True)
     await ctx.send(view=EmbedVote())
 
+@bot.command()
+@commands.is_owner()
+async def new_star_election(ctx: commands.Context, *args):
+    URL = "https://star-vote.herokuapp.com/API/Elections"
+    election_creator_id = ctx.author.id
+    print("Election creator id: " + str(election_creator_id))
+    election_name = args[0]
+    days = int(args[1])
+    print("Duration of Election: " + args[1] + " Days")
+    candidates = args[2:]
+    candidate_list = []
+    for candidate in candidates:
+        print("Candidate: " + candidate)
+        new_candidate_obj = { "Candidate": { "candidate_name": candidate}}
+        candidate_list.append(new_candidate_obj)
+    new_race_obj = {
+                     "Race":
+                     {
+                       "title": election_name,
+                       "voting_method": "STAR",
+                       "num_winners": 1,
+                       "candidates": candidate_list
+                     }
+                   }
+    race_list = [new_race_obj]
+    new_election_settings_obj = {
+                                  "ElectionSettings":
+                                  {
+                                      "election_roll_type": "none",
+                                      "voter_id_type": "predefined voter ID"
+                                  }
+                                }
+    new_election_obj = {
+                          "Election":
+                          {
+                            "title": election_name,
+                            "owner_id": str(election_creator_id),
+                            "state": "dev testing",
+                            "races": race_list,
+                            "settings": new_election_settings_obj
+                          }
+                       }
+
+    response = requests.post(URL, json = new_election_obj, cookies = {"id_token": jwt_token})
+    print("response.url: " + response.url + "\n")
+    print("response.status_code: " + str(response.status_code) + "\n")
+    print("response.text: " + response.text + "\n")
+    print("\n\n")
+
+    await new_star_embed(ctx, election_name, days, candidates)
+
+@bot.command()
+@commands.is_owner()
+async def list_star_candidates(ctx: commands.Context, *args):
+    candidate_scores = dict()
+    for candidate in args:
+        message_sent = await ctx.send("```" + candidate + "\n```", ephemeral=True)
+        candidate_scores[candidate] = 0
+        await message_sent.add_reaction('0️⃣')
+        await message_sent.add_reaction('1️⃣')
+        await message_sent.add_reaction('2️⃣')
+        await message_sent.add_reaction('3️⃣')
+        await message_sent.add_reaction('4️⃣')
+        await message_sent.add_reaction('5️⃣')
+        #reaction = await bot.wait_for(['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'], message_sent, )
+        #await ctx.send("You responded with {}".format(reaction.emoji))
+
+    print("Finished displaying candidates.")
+    print("Candidate_scores dict:")
+    for candidate in candidate_scores:
+        print("\tCandidate: " + candidate + "    Score: " + str(candidate_scores[candidate]))
+
+    def checkReaction(reaction, user):
+        print("User: " + str(user))
+        print("ctx.author: " + str(ctx.author))
+        #print("Reaction.message: " + str(reaction.message))
+        print("Reaction.message.content: " + str(reaction.message.content[3:-4]))
+        return True
+
+    score = 0
+    print("Waiting for reaction now.")
+    reaction_add, reactor = await bot.wait_for('reaction_add', check=checkReaction)
+    print("Reaction added to one of the candidates.")
+    print("Reaction_add.emoji: " + reaction_add.emoji)
+    #reaction_remove = await bot.wait_for('reaction_remove', check=checkReaction)
+    if reaction_add.emoji == '0️⃣':
+        score = 0
+    elif reaction_add.emoji == '1️⃣':
+        score = 1
+    elif reaction_add.emoji == '2️⃣':
+        score = 2
+    elif reaction_add.emoji == '3️⃣':
+        score = 3
+    elif reaction_add.emoji == '4️⃣':
+        score = 4
+    elif reaction_add.emoji == '5️⃣':
+        score = 5
+
+    candidate_scores[reaction_add.message.content[3:-4]] = score
+    print("Updated candidate_scores dict:")
+    for candidate in candidate_scores:
+        print("\tCandidate: " + candidate + "    Score: " + str(candidate_scores[candidate]))
+
+    thing = await ctx.send(view=SubmitBallotView())
 
 @bot.command()
 @commands.is_owner()
@@ -476,4 +616,4 @@ async def results(ctx: commands.Context, *args):
             f"{str(candidate) :{padding_char}<{candidate_padding_length}}|{' ':{bar_graph_padding_char}<{bar_graph_padding_length}}{' ':{padding_char}>{bar_graph_empty_padding_length}}| {score}")
 
 
-bot.run(token)
+bot.run(discord_token)
