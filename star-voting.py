@@ -3,27 +3,36 @@ import datetime
 import os
 import traceback
 
+import requests
 import discord
 from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
 
+import json
+
 load_dotenv()
-token = os.getenv('TOKEN')
+discord_token = os.getenv('DISCORD_TOKEN')
+jwt_secret_key = os.getenv('JWT_SECRET_KEY')
+jwt_token = os.getenv('JWT_TOKEN')
 
 # The guild in which this slash command will be registered.
 # It is recommended to have a test guild to separate from your "production" bot
 TEST_GUILD = discord.Object(id=918037457277161492)
 
 
+
+
 class CandidateScorecardView(discord.ui.View):
     def __init__(self):
+        self.score_chosen = -1
         super().__init__(timeout=None)
 
     @discord.ui.button(label='0', style=discord.ButtonStyle.grey, custom_id='persistent_view:0')
     async def zero(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 0
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -32,6 +41,7 @@ class CandidateScorecardView(discord.ui.View):
     async def one(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 1
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -40,6 +50,7 @@ class CandidateScorecardView(discord.ui.View):
     async def two(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 2
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -48,6 +59,7 @@ class CandidateScorecardView(discord.ui.View):
     async def three(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 3
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -56,6 +68,7 @@ class CandidateScorecardView(discord.ui.View):
     async def four(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 4
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
         await interaction.response.edit_message(view=self)
@@ -64,8 +77,18 @@ class CandidateScorecardView(discord.ui.View):
     async def five(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Make sure to update the message with our updated selves
         self.reset_all_buttons()
+        self.score_chosen = 5
         button.style = discord.ButtonStyle.blurple
         button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Prev', style=discord.ButtonStyle.grey, custom_id='persistent_view:prev')
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Make sure to update the message with our updated selves
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.grey, custom_id='persistent_view:next')
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(view=self)
 
     def reset_all_buttons(self):
@@ -87,12 +110,12 @@ class SubmitBallotView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label='Submit', style=discord.ButtonStyle.green, custom_id='persistent_view:green')
+    @discord.ui.button(label='Submit Ballot 🗳', style=discord.ButtonStyle.green, custom_id='persistent_view:submit_ballot')
     async def submitballot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Ballot submitted :)")
+        await interaction.response.send_message("Ballot submitted to the void :)", ephemeral=True)
 
 
-class BallotView(discord.ui.View):
+class BallotView(discord.ui.View, ):
     def __init__(self):
         super().__init__(timeout=None)
 
@@ -103,9 +126,22 @@ class EmbedVote(discord.ui.View):
 
     @discord.ui.button(label='Vote', style=discord.ButtonStyle.green, custom_id='persistent_view:vote')
     async def vote(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Make sure to update the message with our updated selves
-        await interaction.response.send_message("Score these candidates on a 0 to 5 scale.\nCandidate Name",
-                                                view=BallotView(), ephemeral=True)
+        message_sent = await interaction.send("```candidate_name\n```", ephemeral=True)
+        #await interaction.response.send_message(view=CandidateScorecardView(), ephemeral=True)
+        #await interaction.followup.send("Complete your ballot by clicking the emoji corresponding to the score you would give the candidate.")
+        #for candidate in args:
+        #    message_sent = await ctx.send(candidate)
+        #    await message_sent.add_reaction('0️⃣')
+        #    await message_sent.add_reaction('1️⃣')
+        #    await message_sent.add_reaction('2️⃣')
+        #    await message_sent.add_reaction('3️⃣')
+        #    await message_sent.add_reaction('4️⃣')
+        #    await message_sent.add_reaction('5️⃣')
+        #await interaction.response.send_message("Score these candidates on a 0 to 5 scale.\nCandidate Name",
+        #                                        view=CandidateScorecardView(), ephemeral=True)
+        # Webhooks
+        #await interaction.followup.send("Score these candidates on a 0 to 5 scale.\nCandidate Name",
+        #                                view=CandidateScorecardView(), ephemeral=True)
 
 
 class EmbedEdit(discord.ui.View):
@@ -128,17 +164,10 @@ class EmbedEdit(discord.ui.View):
 
     @discord.ui.button(label='Edit Candidates', style=discord.ButtonStyle.blurple,
                        custom_id='persistent_view:editcandidates1')
-    async def editcandidates1(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def editcandidates(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Need to make sure only the creator can edit the embed.
         # if (interaction.user == message.user):
-        await interaction.response.send_modal(STARVotingCandidateEdit())
-
-    @discord.ui.button(label='Edit Candidates 2', style=discord.ButtonStyle.blurple,
-                       custom_id='persistent_view:editcandidates2')
-    async def editcandidates2(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Need to make sure only the creator can edit the embed.
-        # if (interaction.user == message.user):
-        await interaction.response.send_modal(STARVotingCandidateEdit())
+        await interaction.response.send_modal(STARVotingCandidateNameEdit())
 
 
 class STARVotingElectionSetup(discord.ui.Modal, title='New STAR Voting Election'):
@@ -200,6 +229,9 @@ class STARVotingDescriptionEdit(discord.ui.Modal, title='Edit the Description'):
     # default=defaultText,
 
     async def on_submit(self, interaction: discord.Interaction):
+        URL = "https://star-vote.herokuapp.com/API/Elections"
+        election = requests.get(URL)
+        response = requests.post(URL, json = new_election_obj, cookies = {"custom_id_token": jwt_token})
         await interaction.response.send_message('Starting a new election...', ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -269,6 +301,58 @@ class STARVotingCandidateEdit(discord.ui.Modal, title='Edit the Candidates'):
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.send_message('Starting a new election...', ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
+
+        # Make sure we know what the error actually is
+        traceback.print_tb(error.__traceback__)
+
+class STARVotingCandidateNameEdit(discord.ui.Modal, title='Edit Candidates Names'):
+    descriptionEditBox = discord.ui.TextInput(
+        label='Candidates',
+        placeholder='Harry Potter, Ron Weasley, Hermione Granger, Draco Malfoy, Hedwig',
+        style=TextStyle.long,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        election_id = None
+        # Get the election ID that was saved to the embed by getting the embed from the history of this channel.
+        messages = [mess async for mess in interaction.message.channel.history(limit=3)]
+        for message in messages:
+            for embed in message.embeds:
+                for field in embed.fields:
+                    if field.name == "Election ID":
+                        election_id = field.value
+                        break
+
+        # Add the election ID to the URL so that we can send the correct get request.
+        URL = "https://star-vote.herokuapp.com/API/Election/"
+        URL += str(election_id)
+        # Get the election from star-vote.
+        draft_election_response = requests.get(URL, cookies = {"custom_id_token": jwt_token})
+
+        # Display all the election data.
+        print("\ndraft_election_response")
+        print(draft_election_response)
+        print("\ndraft_election_response.text")
+        print(draft_election_response.text)
+        draft_election_json = json.loads(draft_election_response.text)
+        draft_election_response_election = draft_election_json["election"]
+        print("\ndraft_election_response_election")
+        print(draft_election_response_election)
+        draft_election_response_races = draft_election_response_election["races"]
+        print("\ndraft_election_response_races")
+        print(draft_election_response_races)
+        draft_election_response_race = draft_election_response_races[0]
+        print("\ndraft_election_response_race")
+        print(draft_election_response_race)
+        draft_election_response_candidates = draft_election_response_race["candidates"]
+        print("\ndraft_election_response_candidates")
+        print(draft_election_response_candidates)
+
+        # Send a message to the person who edited the candidates with the values they provided.
+        await interaction.response.send_message(f'Starting a new election... {self.descriptionEditBox}', ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
@@ -365,24 +449,31 @@ def prettify_candidates(candidate: tuple) -> str:
 
 @bot.command()
 @commands.is_owner()
-async def star(ctx: commands.Context, *args):
+async def new_star_embed(ctx: commands.Context, *args):
     """Creates an embed for a STAR voting election.
-        args:
-            ElectionTitle: Title of the election
+        Arguments:
+            ElectionID: The ID of the election that STAR Vote generates.
+            ElectionTitle: Title of the election. (e.g. NewElection or "New Election")
             Days: Number of days the election will last.
-            Candidates: As many candidates as you want. Using both firstname and lastname requires "Jane Doe"
-        example:
+            Candidates: As many candidates as you want. (e.g. JaneDoe or "Jane Doe")
+        Example:
             .star "What is the best color?" 5 Blue Red Green Yellow Purple Orange
     """
     # The first argument should be the election title.
-    electionTitle = args[0]
+    electionID = args[0]
+    # The first argument should be the election title.
+    electionTitle = args[1]
     # Get how many days the STAR Voting election will last and set an end date.
     now = datetime.datetime.now()
-    days = int(args[1])
+    days = int(args[2])
     endDate = now + datetime.timedelta(days)
     endDate = endDate.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
     # Set the candidates into their own variable.
-    candidateTuple = args[2:]
+    candidateTuple = args[3:]
+    # stuff that wasn't working idk
+    #candidateTuple = ()
+    #for candidate in args[2:]:
+    #    candidateTuple = (candidateTuple + candidate)
     candidates = str(candidateTuple)
     # Pretty print the candidates
     #candidates_prettified = prettify_candidates(candidates)
@@ -390,7 +481,7 @@ async def star(ctx: commands.Context, *args):
     # Using block quotes via "> " or ">>> " looks nice so maybe use it for the formatting of values.
 
     # Create the instructions for the embed.
-    star_voting_instructions = "See the image below for instructions \non how a STAR voting election works! " \
+    star_voting_instructions = "Click on the image below for instructions \non how a STAR voting election works! " \
                                "\nThen click on Vote and fill out your ballot!"
     embedVar = discord.Embed(
         title=electionTitle, description=star_voting_instructions,
@@ -409,8 +500,9 @@ async def star(ctx: commands.Context, *args):
     embedVar.add_field(name="🟢 Green Party", value=f"> {candidates}", inline=True)
     embedVar.add_field(name="🔵 Blue Party", value=f"> {candidates}", inline=True)
     embedVar.add_field(name="🟣 Purple Party", value=f"> {candidates}", inline=True)
-
-    embedVar.add_field(name="Current Vote Count:", value="#ofvotes", inline=False)
+    vote_count = 0
+    embedVar.add_field(name="Current Vote Count:", value=vote_count, inline=False)
+    embedVar.add_field(name="Election ID", value=electionID, inline=False)
 
     # Set the large image that displays.
     image_simple_ballot = "https://d3n8a8pro7vhmx.cloudfront.net/unifiedprimary/pages/494/attachments/original/1632368538/STAR_Ballot.jpg?1632368538"
@@ -434,10 +526,118 @@ async def star(ctx: commands.Context, *args):
     # ctx.author.guild_avatar displays as None if you don't have a server specific picture.
     embedVar.set_footer(text=f"Election created by {ctx.author.display_name}")
 
+    print("New STAR Embed Created at " + endDate)
     await ctx.send(embed=embedVar)
     await ctx.send(view=EmbedEdit(), ephemeral=True)
     await ctx.send(view=EmbedVote())
 
+@bot.command()
+@commands.is_owner()
+async def new_star_election(ctx: commands.Context, *args):
+    URL = "https://star-vote.herokuapp.com/API/Elections"
+    election_creator_id = ctx.author.id
+    print("Election creator id: " + str(election_creator_id))
+    election_name = args[0]
+    days = int(args[1])
+    print("Duration of Election: " + args[1] + " Days")
+    candidates = args[2:]
+    candidate_list = []
+    for candidate in candidates:
+        print("Candidate: " + candidate)
+        new_candidate_obj = { "candidate_name": candidate}
+        candidate_list.append(new_candidate_obj)
+    new_race_obj = {
+                       "title": election_name,
+                       "voting_method": "STAR",
+                       "num_winners": 1,
+                       "candidates": candidate_list
+                   }
+    race_list = [new_race_obj]
+    new_authentication_obj = {
+                                 "voter_id": False,
+                                 "email": True
+                             }
+    new_election_settings_obj = {
+                                    "voter_access": "open",
+                                    "voter_authentication": new_authentication_obj
+                                }
+    new_election_obj = {
+                          "Election":
+                          {
+                            "title": election_name,
+                            "owner_id": str(election_creator_id),
+                            "state": "draft",
+                            "races": race_list,
+                            "settings": new_election_settings_obj,
+                            "auth_key": jwt_secret_key
+                          }
+                       }
+
+    # need to create a separate token for every user that votes, but those tokens don't need to be stored.
+    response = requests.post(URL, json = new_election_obj, cookies = {"custom_id_token": jwt_token})
+    print("response.url: " + response.url + "\n")
+    print("response.status_code: " + str(response.status_code) + "\n")
+    print("response.text: " + response.text + "\n")
+    print("\n\n")
+
+    response_data = json.loads(response.text)
+    election_id = response_data["election"]["election_id"]
+
+    await new_star_embed(ctx, election_id, election_name, days, candidates)
+
+@bot.command()
+@commands.is_owner()
+async def list_star_candidates(ctx: commands.Context, *args):
+    candidate_scores = dict()
+    for candidate in args:
+        message_sent = await ctx.send("```" + candidate + "\n```", ephemeral=True)
+        candidate_scores[candidate] = 0
+        await message_sent.add_reaction('0️⃣')
+        await message_sent.add_reaction('1️⃣')
+        await message_sent.add_reaction('2️⃣')
+        await message_sent.add_reaction('3️⃣')
+        await message_sent.add_reaction('4️⃣')
+        await message_sent.add_reaction('5️⃣')
+        #reaction = await bot.wait_for(['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'], message_sent, )
+        #await ctx.send("You responded with {}".format(reaction.emoji))
+
+    print("Finished displaying candidates.")
+    print("Candidate_scores dict:")
+    for candidate in candidate_scores:
+        print("\tCandidate: " + candidate + "    Score: " + str(candidate_scores[candidate]))
+
+    def checkReaction(reaction, user):
+        print("User: " + str(user))
+        print("ctx.author: " + str(ctx.author))
+        #print("Reaction.message: " + str(reaction.message))
+        print("Reaction.message.content: " + str(reaction.message.content[3:-4]))
+        return True
+
+    score = 0
+    print("Waiting for reaction now.")
+    reaction_add, reactor = await bot.wait_for('reaction_add', check=checkReaction)
+    print("Reaction added to one of the candidates.")
+    print("Reaction_add.emoji: " + reaction_add.emoji)
+    #reaction_remove = await bot.wait_for('reaction_remove', check=checkReaction)
+    if reaction_add.emoji == '0️⃣':
+        score = 0
+    elif reaction_add.emoji == '1️⃣':
+        score = 1
+    elif reaction_add.emoji == '2️⃣':
+        score = 2
+    elif reaction_add.emoji == '3️⃣':
+        score = 3
+    elif reaction_add.emoji == '4️⃣':
+        score = 4
+    elif reaction_add.emoji == '5️⃣':
+        score = 5
+
+    candidate_scores[reaction_add.message.content[3:-4]] = score
+    print("Updated candidate_scores dict:")
+    for candidate in candidate_scores:
+        print("\tCandidate: " + candidate + "    Score: " + str(candidate_scores[candidate]))
+
+    thing = await ctx.send(view=SubmitBallotView())
 
 @bot.command()
 @commands.is_owner()
@@ -476,4 +676,4 @@ async def results(ctx: commands.Context, *args):
             f"{str(candidate) :{padding_char}<{candidate_padding_length}}|{' ':{bar_graph_padding_char}<{bar_graph_padding_length}}{' ':{padding_char}>{bar_graph_empty_padding_length}}| {score}")
 
 
-bot.run(token)
+bot.run(discord_token)
