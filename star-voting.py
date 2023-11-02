@@ -756,12 +756,14 @@ async def new_star_election_using_emojis(ctx: commands.Context, *args):
 
 
 # This function runs periodically every hour
-async def checkIfElectionIsFinished(election_end_time, channel):
+async def checkIfElectionIsFinished(election_end_time: str, channel):
     now = datetime.datetime.now()
-    current_date = now.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
+    date_time_format = "%A, %B %d, %Y  %H:%M:%S"
+    election_end_datetime = datetime.datetime.strptime(election_end_time, date_time_format)
+    current_date = now.strftime(date_time_format)  # Example: Friday September 16, 2022  18:10:11
     print("Current Date =", current_date)
 
-    if(current_date == election_end_time):  # check if matches with the desired time
+    if now > election_end_datetime:  # check if the current time has past the end time
         print('Calculating Election Results')
         await calculateElectionResultsFromEmojis(channel)
     else:
@@ -773,9 +775,8 @@ async def calculateElectionResultsFromEmojis(channel):
     # Collect the message of each candidate.
     print(channel.name)
     list_of_bot_messages = []
+    print("Channel History Loop")
     async for message in channel.history(limit=100):
-        print("Channel History Loop")
-        print(message)
         if message.author.bot and message.embeds:
             break
         elif message.author.bot and not message.embeds:
@@ -783,6 +784,6 @@ async def calculateElectionResultsFromEmojis(channel):
 
     # Reprint the candidate and their total score
     for message in list_of_bot_messages:
-        print(message)
+        print(message.content)
 
 bot.run(discord_token)
