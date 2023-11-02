@@ -776,14 +776,34 @@ async def calculateElectionResultsFromEmojis(channel):
     print(channel.name)
     list_of_bot_messages = []
     print("Channel History Loop")
+    # will break if there are embedded messages posted after the poll options
     async for message in channel.history(limit=100):
         if message.author.bot and message.embeds:
             break
         elif message.author.bot and not message.embeds:
             list_of_bot_messages.append(message)
 
+    score_count = await countEachIndexOfScores(list_of_bot_messages)
+
+
+async def countEachIndexOfScores(list_of_bot_messages):
     # Reprint the candidate and their total score
+    number_of_candidates = 2
+    score_count = [[0] * 6 for _ in range(number_of_candidates)]
+    current_candidate = 0
     for message in list_of_bot_messages:
-        print(message.content)
+        reactions = message.reactions
+        # move to the next message if the reactions list is empty
+        if not reactions:
+            continue
+        print(reactions)
+        print("current_candidate: ", current_candidate)
+        for index, reaction in enumerate(reactions):
+            score_count[current_candidate][index] = (reaction.count-1)
+        current_candidate += 1
+    print("\n")
+    for i in range(number_of_candidates):
+        print(score_count[i])
+    return score_count
 
 bot.run(discord_token)
