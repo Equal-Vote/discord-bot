@@ -783,13 +783,15 @@ async def calculateElectionResultsFromEmojis(channel):
         elif message.author.bot and not message.embeds:
             list_of_bot_messages.append(message)
 
-    score_count = await countEachIndexOfScores(list_of_bot_messages)
+    vote_count = await count_each_index_of_scores(list_of_bot_messages)
+    multiplied_indexes = await calculate_for_each_index_of_score(vote_count)
 
 
-async def countEachIndexOfScores(list_of_bot_messages):
+# TODO: make safe against duplicate votes
+async def count_each_index_of_scores(list_of_bot_messages):
     # Reprint the candidate and their total score
     number_of_candidates = 2
-    score_count = [[0] * 6 for _ in range(number_of_candidates)]
+    vote_count = [[0] * 6 for _ in range(number_of_candidates)]
     current_candidate = 0
     for message in list_of_bot_messages:
         reactions = message.reactions
@@ -799,11 +801,22 @@ async def countEachIndexOfScores(list_of_bot_messages):
         print(reactions)
         print("current_candidate: ", current_candidate)
         for index, reaction in enumerate(reactions):
-            score_count[current_candidate][index] = (reaction.count-1)
+            vote_count[current_candidate][index] = (reaction.count-1)
         current_candidate += 1
-    print("\n")
+    print("\nVote Count")
+    print(vote_count)
+    return vote_count
+
+
+async def calculate_for_each_index_of_score(vote_count):
+    number_of_candidates = 2
+    multiplied_indexes = [[0] * 6 for _ in range(number_of_candidates)]
     for i in range(number_of_candidates):
-        print(score_count[i])
-    return score_count
+        for index, count in enumerate(vote_count[i]):
+            multiplied_indexes[i][index] = index * count
+    print("\nMultiplied Indexes")
+    print(multiplied_indexes)
+    return multiplied_indexes
+
 
 bot.run(discord_token)
