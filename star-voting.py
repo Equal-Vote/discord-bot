@@ -9,6 +9,7 @@ import discord
 from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
+import heapq
 
 import json
 
@@ -541,7 +542,7 @@ async def new_star_embed(ctx: commands.Context, *args):
         print("About to have the bot send a message for each candidate.")
         for candidate in candidateTuple:
             print("Creating message and voting reactions for: " + candidate)
-            await ctx.send("‎") # whitespace padding
+            #await ctx.send("‎") # whitespace padding
             # output_candidate = await ctx.send("> ```" + candidate + "```\n\n")
             output_candidate = await ctx.send("# " + candidate)
             reactions = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -784,19 +785,36 @@ async def calculateElectionResultsFromEmojis(ctx):
         elif message.author.bot and not message.embeds:
             list_of_bot_messages.append(message)
 
+    candidate_list = await get_candidates_from_messages(list_of_bot_messages)
     vote_count = await count_each_index_of_scores(list_of_bot_messages)
     multiplied_indexes = await calculate_for_each_index_of_score(vote_count)
     total_scores = await calculate_total_scores(multiplied_indexes)
-    await ctx.send("\n# Final Results")
+    await ctx.send("\n## Final Results")
     for index, candidate in enumerate(vote_count):
-        print("## Candidate #", str(index) + " was...")
-        await ctx.send("## Candidate #" + str(index) + " was...")
-        indexes = [x for x in range(0, 6)]
-        votes = [vote for vote in candidate]
-        print(["scored " + str(x) + "  " + str(y) + " times" for x, y in zip(indexes, votes)])
-        await ctx.send(["scored " + str(x) + "  " + str(y) + " times" for x, y in zip(indexes, votes)])
+        print("### Candidate: " + candidate_list[index] + " was scored...")
+        await ctx.send("### Candidate: " + candidate_list[index] + " was scored...")
+        for score_index, score in enumerate(candidate):
+            print(str(score_index) + "  -  " + str(score) + " times.")
+            await ctx.send(str(score_index) + "  -  " + str(score) + " times.")
         print("### Final Score: " + str(total_scores[index]))
         await ctx.send("### Final Score: " + str(total_scores[index]))
+    print("# Top 2 Runoff")
+    await ctx.send("# Top 2 Runoff")
+    top_2_candidates_index = [total_scores.index(i) for i in heapq.nlargest(2, total_scores)]
+    print("### " + candidate_list[top_2_candidates_index[0]] + " with a score of " + str(total_scores[top_2_candidates_index[0]]))
+    print("### " + candidate_list[top_2_candidates_index[1]] + " with a score of " + str(total_scores[top_2_candidates_index[1]]))
+    await ctx.send("### " + candidate_list[top_2_candidates_index[0]] + " with a score of " + str(total_scores[top_2_candidates_index[0]]))
+    await ctx.send("### " + candidate_list[top_2_candidates_index[1]] + " with a score of " + str(total_scores[top_2_candidates_index[1]]))
+    await calculate_runoff_winner(ctx, list_of_bot_messages)
+
+
+async def get_candidates_from_messages(list_of_bot_messages):
+    candidate_list = []
+    for message in list_of_bot_messages:
+        if len(message.content) > 2 and message.content[0] == "#" and message.content[1] == " ":
+            candidate_list.append(message.content.replace("#", "").strip())
+    print("\nCandidate List", candidate_list)
+    return candidate_list
 
 
 # TODO: make safe against duplicate votes
@@ -810,6 +828,7 @@ async def count_each_index_of_scores(list_of_bot_messages):
         # move to the next message if the reactions list is empty
         if not reactions:
             continue
+        print()
         print(reactions)
         print("current_candidate: ", current_candidate)
         for index, reaction in enumerate(reactions):
@@ -846,5 +865,28 @@ async def calculate_total_scores(multiplied_indexes):
         total_scores[index] = candidate_total_score
     print(total_scores)
     return total_scores
+
+
+async def calculate_runoff_winner(ctx, list_of_bot_messages):
+    print("\nReactions")
+    user_to_preference_dict = {}
+    for message in list_of_bot_messages:
+        #print("if " + str(message.content) + "...")
+        reactions = message.reactions
+        if len(reactions) < 6:
+            continue
+        for i in reversed(range(6)):
+            reaction = message.reactions[i]
+            users = [user async for user in reaction.users()]
+            print(users)
+            for user in users:
+                if user.bot:
+                    continue
+                if user.name not in user_to_preference_dict:
+                    user_to_preference_dict[user.name] = message.content
+            #await ctx.send(reaction.users())
+            #users = await reaction.users().flatten()
+            #print('\n'.join(map(str, users)))
+            #await ctx.channel.send('\n'.join(map(str, users)))
 
 bot.run(discord_token)
