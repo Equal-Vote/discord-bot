@@ -547,7 +547,7 @@ async def new_star_embed(ctx: commands.Context, *args):
             reactions = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
             for emoji in reactions:
                 await output_candidate.add_reaction(emoji)
-        await checkIfElectionIsFinished(args[2], ctx.channel)
+        await checkIfElectionIsFinished(ctx, args[2])
 
 
 # Get how many days the STAR Voting election will last and set an end date.
@@ -756,7 +756,7 @@ async def new_star_election_using_emojis(ctx: commands.Context, *args):
 
 
 # This function runs periodically every hour
-async def checkIfElectionIsFinished(election_end_time: str, channel):
+async def checkIfElectionIsFinished(ctx: commands.Context, election_end_time: str):
     now = datetime.datetime.now()
     date_time_format = "%A, %B %d, %Y  %H:%M:%S"
     election_end_datetime = datetime.datetime.strptime(election_end_time, date_time_format)
@@ -765,19 +765,20 @@ async def checkIfElectionIsFinished(election_end_time: str, channel):
 
     if now > election_end_datetime:  # check if the current time has past the end time
         print('Calculating Election Results')
-        await calculateElectionResultsFromEmojis(channel)
+        await ctx.send("### *The election has finished*.")
+        await calculateElectionResultsFromEmojis(ctx)
     else:
-        threading.Timer(1, checkIfElectionIsFinished, [election_end_time, channel]).start()
+        threading.Timer(1, checkIfElectionIsFinished, [ctx, election_end_time]).start()
 
-async def calculateElectionResultsFromEmojis(channel):
+async def calculateElectionResultsFromEmojis(ctx):
     #bot.owner_id is my id or whoever added the bot
 
     # Collect the message of each candidate.
-    print(channel.name)
+    print(ctx.channel.name)
     list_of_bot_messages = []
     print("Channel History Loop")
     # will break if there are embedded messages posted after the poll options
-    async for message in channel.history(limit=100):
+    async for message in ctx.channel.history(limit=100):
         if message.author.bot and message.embeds:
             break
         elif message.author.bot and not message.embeds:
@@ -785,6 +786,17 @@ async def calculateElectionResultsFromEmojis(channel):
 
     vote_count = await count_each_index_of_scores(list_of_bot_messages)
     multiplied_indexes = await calculate_for_each_index_of_score(vote_count)
+    total_scores = await calculate_total_scores(multiplied_indexes)
+    await ctx.send("\n# Final Results")
+    for index, candidate in enumerate(vote_count):
+        print("## Candidate #", str(index) + " was...")
+        await ctx.send("## Candidate #" + str(index) + " was...")
+        indexes = [x for x in range(0, 6)]
+        votes = [vote for vote in candidate]
+        print(["scored " + str(x) + "  " + str(y) + " times" for x, y in zip(indexes, votes)])
+        await ctx.send(["scored " + str(x) + "  " + str(y) + " times" for x, y in zip(indexes, votes)])
+        print("### Final Score: " + str(total_scores[index]))
+        await ctx.send("### Final Score: " + str(total_scores[index]))
 
 
 # TODO: make safe against duplicate votes
@@ -818,5 +830,21 @@ async def calculate_for_each_index_of_score(vote_count):
     print(multiplied_indexes)
     return multiplied_indexes
 
+
+async def calculate_total_scores(multiplied_indexes):
+    number_of_candidates = 2
+    total_scores = [0] * number_of_candidates
+    for index, candidate in enumerate(multiplied_indexes):
+        print("index:", index)
+        print("candidate", candidate)
+        candidate_total_score = 0
+        for score in candidate:
+            print("score", score)
+            candidate_total_score += score
+        print(total_scores)
+        print(candidate_total_score)
+        total_scores[index] = candidate_total_score
+    print(total_scores)
+    return total_scores
 
 bot.run(discord_token)
