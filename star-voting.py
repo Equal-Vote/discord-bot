@@ -1,5 +1,6 @@
 # This example requires the 'message_content' privileged intent to function.
 import datetime
+import threading
 import os
 import traceback
 
@@ -8,6 +9,7 @@ import discord
 from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
+import heapq
 
 import json
 
@@ -463,13 +465,11 @@ async def new_star_embed(ctx: commands.Context, *args):
     electionID = args[0]
     # The first argument should be the election title.
     electionTitle = args[1]
-    # Get how many days the STAR Voting election will last and set an end date.
     now = datetime.datetime.now()
-    days = int(args[2])
-    endDate = now + datetime.timedelta(days)
-    endDate = endDate.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
     # Set the candidates into their own variable.
-    candidateTuple = args[3:]
+    candidateTupleofTuples = args[3:]
+    print(args)
+    candidateTuple = candidateTupleofTuples[0]
     # stuff that wasn't working idk
     #candidateTuple = ()
     #for candidate in args[2:]:
@@ -480,14 +480,20 @@ async def new_star_embed(ctx: commands.Context, *args):
 
     # Using block quotes via "> " or ">>> " looks nice so maybe use it for the formatting of values.
 
+
     # Create the instructions for the embed.
-    star_voting_instructions = "Click on the image below for instructions \non how a STAR voting election works! " \
-                               "\nThen click on Vote and fill out your ballot!"
+    # Add further instructions depending on if this is an emoji election or star.vote election.
+    star_voting_instructions = "Click on the image below for instructions \non how a STAR voting election works! "
+    if (electionID != None):
+        star_voting_instructions += "\nThen click on Vote and fill out your ballot!"
+    else:
+        star_voting_instructions += "\nThen fill out one number emoji for each candidate.\nThe highest value you give will be accepted."
+
     embedVar = discord.Embed(
         title=electionTitle, description=star_voting_instructions,
         color=0x336EFF, timestamp=now
     )
-    embedVar.add_field(name="End Date", value=f"This election will end in {days} days on\n{endDate}", inline=False)
+    embedVar.add_field(name="End Date", value=f"This election will end on\n{args[2]}", inline=False)
 
     #for x in args[2:]:
     # Add candidates under their respective parties, if the parties exist.
@@ -502,7 +508,8 @@ async def new_star_embed(ctx: commands.Context, *args):
     embedVar.add_field(name="🟣 Purple Party", value=f"> {candidates}", inline=True)
     vote_count = 0
     embedVar.add_field(name="Current Vote Count:", value=vote_count, inline=False)
-    embedVar.add_field(name="Election ID", value=electionID, inline=False)
+    if (electionID != None):
+        embedVar.add_field(name="Election ID", value=electionID, inline=False)
 
     # Set the large image that displays.
     image_simple_ballot = "https://d3n8a8pro7vhmx.cloudfront.net/unifiedprimary/pages/494/attachments/original/1632368538/STAR_Ballot.jpg?1632368538"
@@ -526,10 +533,59 @@ async def new_star_embed(ctx: commands.Context, *args):
     # ctx.author.guild_avatar displays as None if you don't have a server specific picture.
     embedVar.set_footer(text=f"Election created by {ctx.author.display_name}")
 
-    print("New STAR Embed Created at " + endDate)
+    print("New STAR Embed Created at " + args[2])
     await ctx.send(embed=embedVar)
     await ctx.send(view=EmbedEdit(), ephemeral=True)
-    await ctx.send(view=EmbedVote())
+    if (electionID != None):
+        await ctx.send(view=EmbedVote())
+    else:
+        print("About to have the bot send a message for each candidate.")
+        for candidate in candidateTuple:
+            print("Creating message and voting reactions for: " + candidate)
+            #await ctx.send("‎") # whitespace padding
+            # output_candidate = await ctx.send("> ```" + candidate + "```\n\n")
+            output_candidate = await ctx.send("# " + candidate)
+            reactions = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+            for emoji in reactions:
+                await output_candidate.add_reaction(emoji)
+        await checkIfElectionIsFinished(ctx, args[2])
+
+
+# Get how many days the STAR Voting election will last and set an end date.
+def set_the_election_end_date(current_datetime, current_arg, args) -> tuple[str, int]:
+    now = current_datetime
+    seconds = 0
+    minutes = 0
+    hours = 0
+    days = 0
+    weeks = 0
+    current_arg = current_arg
+    print(args)
+    for word in args[current_arg:]:
+        if str(word).isnumeric():
+            continue
+        if word == "seconds":
+            current_arg += 1
+            seconds = int(args[current_arg])
+        elif word == "minutes":
+            current_arg += 1
+            minutes = int(args[current_arg])
+        elif word == "hours":
+            current_arg += 1
+            hours = int(args[current_arg])
+        elif word == "days":
+            current_arg += 1
+            days = int(args[current_arg])
+        elif word == "weeks":
+            current_arg += 1
+            weeks = int(args[current_arg])
+        else:
+            break
+        current_arg += 1
+    end_date = now + datetime.timedelta(seconds=seconds, minutes=minutes, hours=hours, days=days, weeks=weeks)
+    end_date = end_date.strftime("%A, %B %d, %Y  %H:%M:%S")  # Example: Friday September 16, 2022  18:10:11
+    return end_date, current_arg
+
 
 @bot.command()
 @commands.is_owner()
@@ -675,5 +731,162 @@ async def results(ctx: commands.Context, *args):
         await ctx.send(
             f"{str(candidate) :{padding_char}<{candidate_padding_length}}|{' ':{bar_graph_padding_char}<{bar_graph_padding_length}}{' ':{padding_char}>{bar_graph_empty_padding_length}}| {score}")
 
+@bot.command()
+@commands.is_owner()
+async def new_star_election_using_emojis(ctx: commands.Context, *args):
+    print("args: ", args)
+    election_creator_id = ctx.author.id
+    print("Election creator id: " + str(election_creator_id))
+    election_name = args[0]
+    # Get how many days the STAR Voting election will last and set an end date.
+    now = datetime.datetime.now()
+    current_arg = 1
+    end_date, arg_count = set_the_election_end_date(now, current_arg, args)
+    print("End Date: ", end_date)
+    # print("Arg Count: ", arg_count)
+    # print("Duration of Election: " + args[1] + " Days")
+    candidates = args[arg_count:]
+    candidate_list = []
+    for candidate in candidates:
+        print("Candidate: " + candidate)
+        new_candidate_obj = { "candidate_name": candidate}
+        candidate_list.append(new_candidate_obj)
+    election_id = None
+
+    await new_star_embed(ctx, election_id, election_name, end_date, candidates)
+
+
+# This function runs periodically every hour
+async def checkIfElectionIsFinished(ctx: commands.Context, election_end_time: str):
+    now = datetime.datetime.now()
+    date_time_format = "%A, %B %d, %Y  %H:%M:%S"
+    election_end_datetime = datetime.datetime.strptime(election_end_time, date_time_format)
+    current_date = now.strftime(date_time_format)  # Example: Friday September 16, 2022  18:10:11
+    print("Current Date =", current_date)
+
+    if now > election_end_datetime:  # check if the current time has past the end time
+        print('Calculating Election Results')
+        await ctx.send("### *The election has finished*.")
+        await calculateElectionResultsFromEmojis(ctx)
+    else:
+        threading.Timer(1, checkIfElectionIsFinished, [ctx, election_end_time]).start()
+
+async def calculateElectionResultsFromEmojis(ctx):
+    #bot.owner_id is my id or whoever added the bot
+
+    # Collect the message of each candidate.
+    print(ctx.channel.name)
+    list_of_bot_messages = []
+    print("Channel History Loop")
+    # will break if there are embedded messages posted after the poll options
+    async for message in ctx.channel.history(limit=100):
+        if message.author.bot and message.embeds:
+            break
+        elif message.author.bot and not message.embeds:
+            list_of_bot_messages.append(message)
+
+    candidate_list = await get_candidates_from_messages(list_of_bot_messages)
+    vote_count = await count_each_index_of_scores(list_of_bot_messages)
+    multiplied_indexes = await calculate_for_each_index_of_score(vote_count)
+    total_scores = await calculate_total_scores(multiplied_indexes)
+    await ctx.send("\n## Final Results")
+    for index, candidate in enumerate(vote_count):
+        print("### Candidate: " + candidate_list[index] + " was scored...")
+        await ctx.send("### Candidate: " + candidate_list[index] + " was scored...")
+        for score_index, score in enumerate(candidate):
+            print(str(score_index) + "  -  " + str(score) + " times.")
+            await ctx.send(str(score_index) + "  -  " + str(score) + " times.")
+        print("### Final Score: " + str(total_scores[index]))
+        await ctx.send("### Final Score: " + str(total_scores[index]))
+    print("# Top 2 Runoff")
+    await ctx.send("# Top 2 Runoff")
+    top_2_candidates_index = [total_scores.index(i) for i in heapq.nlargest(2, total_scores)]
+    print("### " + candidate_list[top_2_candidates_index[0]] + " with a score of " + str(total_scores[top_2_candidates_index[0]]))
+    print("### " + candidate_list[top_2_candidates_index[1]] + " with a score of " + str(total_scores[top_2_candidates_index[1]]))
+    await ctx.send("### " + candidate_list[top_2_candidates_index[0]] + " with a score of " + str(total_scores[top_2_candidates_index[0]]))
+    await ctx.send("### " + candidate_list[top_2_candidates_index[1]] + " with a score of " + str(total_scores[top_2_candidates_index[1]]))
+    await calculate_runoff_winner(ctx, list_of_bot_messages)
+
+
+async def get_candidates_from_messages(list_of_bot_messages):
+    candidate_list = []
+    for message in list_of_bot_messages:
+        if len(message.content) > 2 and message.content[0] == "#" and message.content[1] == " ":
+            candidate_list.append(message.content.replace("#", "").strip())
+    print("\nCandidate List", candidate_list)
+    return candidate_list
+
+
+# TODO: make safe against duplicate votes
+async def count_each_index_of_scores(list_of_bot_messages):
+    # Reprint the candidate and their total score
+    number_of_candidates = 2
+    vote_count = [[0] * 6 for _ in range(number_of_candidates)]
+    current_candidate = 0
+    for message in list_of_bot_messages:
+        reactions = message.reactions
+        # move to the next message if the reactions list is empty
+        if not reactions:
+            continue
+        print()
+        print(reactions)
+        print("current_candidate: ", current_candidate)
+        for index, reaction in enumerate(reactions):
+            vote_count[current_candidate][index] = (reaction.count-1)
+        current_candidate += 1
+    print("\nVote Count")
+    print(vote_count)
+    return vote_count
+
+
+async def calculate_for_each_index_of_score(vote_count):
+    number_of_candidates = 2
+    multiplied_indexes = [[0] * 6 for _ in range(number_of_candidates)]
+    for i in range(number_of_candidates):
+        for index, count in enumerate(vote_count[i]):
+            multiplied_indexes[i][index] = index * count
+    print("\nMultiplied Indexes")
+    print(multiplied_indexes)
+    return multiplied_indexes
+
+
+async def calculate_total_scores(multiplied_indexes):
+    number_of_candidates = 2
+    total_scores = [0] * number_of_candidates
+    for index, candidate in enumerate(multiplied_indexes):
+        print("index:", index)
+        print("candidate", candidate)
+        candidate_total_score = 0
+        for score in candidate:
+            print("score", score)
+            candidate_total_score += score
+        print(total_scores)
+        print(candidate_total_score)
+        total_scores[index] = candidate_total_score
+    print(total_scores)
+    return total_scores
+
+
+async def calculate_runoff_winner(ctx, list_of_bot_messages):
+    print("\nReactions")
+    user_to_preference_dict = {}
+    for message in list_of_bot_messages:
+        #print("if " + str(message.content) + "...")
+        reactions = message.reactions
+        if len(reactions) < 6:
+            continue
+        for i in reversed(range(6)):
+            reaction = message.reactions[i]
+            users = [user async for user in reaction.users()]
+            print(users)
+            for user in users:
+                if user.bot:
+                    continue
+                if user.name not in user_to_preference_dict:
+                    user_to_preference_dict[user.name] = message.content
+            #await ctx.send(reaction.users())
+            #users = await reaction.users().flatten()
+            #print('\n'.join(map(str, users)))
+            #await ctx.channel.send('\n'.join(map(str, users)))
 
 bot.run(discord_token)
