@@ -22,9 +22,6 @@ jwt_token = os.getenv('JWT_TOKEN')
 # It is recommended to have a test guild to separate from your "production" bot
 TEST_GUILD = discord.Object(id=918037457277161492)
 
-
-
-
 class CandidateScorecardView(discord.ui.View):
     def __init__(self):
         self.score_chosen = -1
