@@ -360,7 +360,7 @@ class STARVotingCandidateNameEdit(discord.ui.Modal, title='Edit Candidates Names
         traceback.print_tb(error.__traceback__)
 
 
-class STARVotingBot(commands.Bot):
+class BetterVotingBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -381,7 +381,7 @@ class STARVotingBot(commands.Bot):
         print('------')
 
 
-bot = STARVotingBot()
+bot = BetterVotingBot()
 # All this method does is copy your defined global commands (so ones without a guild or guilds kwarg,
 # or without the @app_commands.guilds() decorator) to the specified guild within the CommandTree.
 # When you use this method you must sync afterward still, you can refer to

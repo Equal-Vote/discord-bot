@@ -18,7 +18,7 @@ RUN useradd -m appuser
 USER appuser
 
 # Specify the command to run the application
-CMD ["python","star-voting.py"]
+CMD ["python","bettervoting.py"]
 # TODO: add a EXPOSE <port>
 
 
