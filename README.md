@@ -6,7 +6,7 @@ Discord bot for running star elections
 
 1. Enable Developer Mode for your User: User Gear -> App Settings -> Advanced -> Developer Mode
 1. [Add bot to server where you have admin access](https://discord.com/oauth2/authorize?client_id=1019135068805005333&permissions=534723950656&scope=bot%20applications.commands)
-1. Reference [star-voting.py](https://github.com/Equal-Vote/discord-bot/blob/main/star-voting.py) for commands (example: ``.list_star_candidates "Yoda" "Han Solo"``)
+1. Reference [bettervoting.py](https://github.com/Equal-Vote/discord-bot/blob/main/bettervoting.py) for commands (example: ``.list_star_candidates "Yoda" "Han Solo"``)
 
 
 ## Running Personal Instance
@@ -35,7 +35,7 @@ Discord bot for running star elections
    Of course, use the token you copied in the previous step in place of `your-token-here`.
 6. **Run the bot**:
    ```bash
-   python star-voting.py
+   python bettervoting.py
    ```
    If successful, you should see
    ```

@@ -729,7 +729,6 @@ async def results(ctx: commands.Context, *args):
             f"{str(candidate) :{padding_char}<{candidate_padding_length}}|{' ':{bar_graph_padding_char}<{bar_graph_padding_length}}{' ':{padding_char}>{bar_graph_empty_padding_length}}| {score}")
 
 @bot.command()
-@commands.is_owner()
 async def new_star_election_using_emojis(ctx: commands.Context, *args):
     print("args: ", args)
     election_creator_id = ctx.author.id
