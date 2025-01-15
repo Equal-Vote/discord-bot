@@ -19,9 +19,6 @@ USER appuser
 
 # Specify the command to run the application
 CMD ["python","star-voting.py"]
-
-# 40404 is the healthcheck port from https://github.com/psidex/DiscordHealthCheck
-# The service it's self doesn't use a port
-EXPOSE 40404 
+# TODO: add a EXPOSE <port>
 
 
