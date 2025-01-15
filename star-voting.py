@@ -10,6 +10,7 @@ from discord import TextStyle
 from discord.ext import commands
 from dotenv import load_dotenv
 import heapq
+import discordhealthcheck
 
 import json
 
@@ -374,6 +375,7 @@ class STARVotingBot(commands.Bot):
         # If you have the message_id you can also pass it as a keyword argument, but for this example
         # we don't have one.
         self.add_view(CandidateScorecardView())
+        self.healthcheck_server = await discordhealthcheck.start(self)
 
     async def on_ready(self):
         await bot.tree.sync(guild=TEST_GUILD)
