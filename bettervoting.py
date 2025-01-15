@@ -390,7 +390,6 @@ bot.tree.copy_global_to(guild=TEST_GUILD)
 
 
 @bot.command()
-@commands.is_owner()
 async def onecandidate(ctx: commands.Context):
     """Starts a persistent view."""
     # In order for a persistent view to be listened to, it needs to be sent to an actual message.
@@ -402,7 +401,6 @@ async def onecandidate(ctx: commands.Context):
 
 
 @bot.command()
-@commands.is_owner()
 async def threecandidates(ctx: commands.Context):
     """Starts a persistent view."""
     await ctx.send("Score these candidates on a 0 to 5 scale.")
@@ -412,7 +410,6 @@ async def threecandidates(ctx: commands.Context):
 
 
 @bot.command()
-@commands.is_owner()
 async def displayoutput(ctx: commands.Context):
     """Displays the results of the election in the form of a crude bar graph"""
     await ctx.send(
@@ -447,7 +444,6 @@ def prettify_candidates(candidate: tuple) -> str:
 
 
 @bot.command()
-@commands.is_owner()
 async def new_star_embed(ctx: commands.Context, *args):
     """Creates an embed for a STAR voting election.
         Arguments:
@@ -585,7 +581,6 @@ def set_the_election_end_date(current_datetime, current_arg, args) -> tuple[str,
 
 
 @bot.command()
-@commands.is_owner()
 async def new_star_election(ctx: commands.Context, *args):
     URL = "https://star-vote.herokuapp.com/API/Elections"
     election_creator_id = ctx.author.id
@@ -639,7 +634,6 @@ async def new_star_election(ctx: commands.Context, *args):
     await new_star_embed(ctx, election_id, election_name, days, candidates)
 
 @bot.command()
-@commands.is_owner()
 async def list_star_candidates(ctx: commands.Context, *args):
     candidate_scores = dict()
     for candidate in args:
@@ -693,7 +687,6 @@ async def list_star_candidates(ctx: commands.Context, *args):
     thing = await ctx.send(view=SubmitBallotView())
 
 @bot.command()
-@commands.is_owner()
 async def results(ctx: commands.Context, *args):
     """Creates a bar chart showing score count for each candidate. Proof of concept."""
     await ctx.send(f"Proof of concept to show score count for each candidate just using text.")
