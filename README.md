@@ -1,5 +1,5 @@
 # discord-bot
-Discord bot for running star elections
+Discord Bot for running star elections
 
 
 ## Adding bot to a server
