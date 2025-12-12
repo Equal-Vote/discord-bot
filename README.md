@@ -1,6 +1,7 @@
 # discord-bot
 Discord Bot for running star elections
 
+Please also see the READ ME in the .venv folder before editing code
 
 ## Adding bot to a server
 
