@@ -43,7 +43,7 @@ class InitBallot(discord.ui.View):
         self.candItems = []
         for i in range(len(self.candidates)):
             print(i)
-            self.candItems.append(Button(label=self.candidates[i]['candidate_name'], style=discord.ButtonStyle.primary))
+            self.candItems.append(Button(label=self.candidates[i]['candidate_name']))
             self.candItems[i].callback = self.button_callback
             self.add_item(self.candItems[i])
 
@@ -52,9 +52,8 @@ class InitBallot(discord.ui.View):
         self.btn.callback= self.button_callback
         self.add_item(self.btn)
 
-    #technically all buttons can begin a ballot to avoid frusturations with users who dont understand STARs
+    #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
-        print("got here")
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
         await interaction.response.send_message(view.description, view= view, ephemeral=True)
 
@@ -95,7 +94,8 @@ class Ballot(discord.ui.View):
             await interaction.response.defer(ephemeral=True)
             #save score
             self.save.scores[self.candNum] = self.values[0]
-        #keeps option selects persistent in when navigating pages, otherwise it always goes back to X
+        #keeps option selects persistent in when navigating pages, otherwise it always goes back to X.
+        #TODO this function causes pages to turn from blank to X when swiping left to right. Does not affect dropdowns already voted on
         def refreshDefault(self):
             for i in self.options:
                 i.default = i.value == self.save.scores[self.candNum]
@@ -117,7 +117,7 @@ class Ballot(discord.ui.View):
 
 
 
-
+    #init for Ballot
     def __init__(self, bot:commands.bot, title:str, candidates:dict, BVIObject, description:str = "Not scoring is the same as scoring 0. Feel free to skip candidates you don't know and to score multiple candidates the same", timeout: float = 300.0):
         super().__init__()
         self.bot = bot
@@ -128,6 +128,7 @@ class Ballot(discord.ui.View):
 
         self.introText: str = self.description
 
+        #save votes here so they are persistent when swiping left/right. This will also be used to send the vote
         self.save = self.saveData(len(candidates))
 
         #used by navButtons
@@ -165,19 +166,17 @@ class Ballot(discord.ui.View):
                 self.pages[i].add_item(j)
 
 
-
+        #This button initiates voting
         self.begin: Button = Button(label="Begin Voting", style= discord.ButtonStyle.primary)
         self.begin.callback = self.beginCallback
         self.add_item(self.begin)
-
-
-        print(self.pages)
                 
 
         
 
     #Change pages
     #set nav buttons based on what page we are on
+    #TODO clean this up and use it
     def setNavs(self, page: int):
         if page == 0:
             navButtons[0].disabled = True
@@ -196,7 +195,8 @@ class Ballot(discord.ui.View):
             navButtons[2].label = ""
 
 
-    #TODO there is likely a more efficient way to do this
+    #callbacks for buttons
+    #TODO there is likely a slightly more efficient way to do this
     def refreshDropdowns(self):
         for child in self.pages[self.currentPage].children:
             if isinstance(child, discord.ui.Select):
@@ -227,7 +227,6 @@ class Ballot(discord.ui.View):
         
         #TODO implement responses for user already voted and failed to send vote
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
-        print(switch)
         await interaction.response.edit_message(content=text, view=None)
             
     async def beginCallback(self, interaction:discord.Interaction):
