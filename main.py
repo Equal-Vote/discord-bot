@@ -3,31 +3,31 @@ from discord.ext import commands
 
 import jwt
 import asyncio
+import os
+from dotenv import load_dotenv
 
 from STARCustomLibs import BVWebInteract as BVI, DiscordBotAssist as DBA
 from Views import PollViews
+
    
 
 #TODO implement error handling
-#TODO deintegrate DBA
+#TODO deintegrate DiscordBotAssist
 if __name__ == "__main__":
-     #create bot and assign it to DiscordBotAssist, as well as toggle the TOKEN.
+    #create bot and assign it to DiscordBotAssist, as well as toggle the TOKEN.
 
-    #ALWAYS DELETE TOKENS BEFORE PUSHING TO REPO!!! NO TOKEN SHOULD EVER BE PUBLIC INCLUDING ALPHA ONES!!!
     intents = discord.Intents.default()
     intents.message_content = True
     intents.guilds = True
     bot = commands.Bot(intents=intents, command_prefix="?")
     client = DBA.DisBotAssist(bot)
-    #ALWAYS DELETE TOKENS BEFORE PUSHING TO REPO!!! NO TOKEN SHOULD EVER BE PUBLIC INCLUDING ALPHA ONES!!!
-    TOKEN = DBA.toggleToken("", "null", "null", False)
 
     load_dotenv()
-    discord_token = os.getenv('DISCORD_TOKEN')
-    jwt_secret_key = os.getenv('JWT_SECRET_KEY')
-    jwt_token = os.getenv('JWT_TOKEN')
+    TOKEN = os.getenv('DISCORD_TOKEN')
+    #jwt_secret_key = os.getenv('JWT_SECRET_KEY')
+    #jwt_token = os.getenv('JWT_TOKEN')
 
-    #Create BetterVoting Web Translator Object to interact with website
+    #dictionary containing BVI Translator objects. There is one per election
     elections: BVI.BVWebTranslator = {}
 
     #Command to get an election from better voting and begin voting in discord

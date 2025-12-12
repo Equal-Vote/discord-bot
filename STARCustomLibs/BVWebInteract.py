@@ -5,6 +5,7 @@ import secrets
 import requests
 import json
 import time
+import hashlib
 
 
 
@@ -102,18 +103,11 @@ class BVWebTranslator:
             },
         }
 
-        headers = {
-            "Authorization": f"Bearer {self.decodeToken(self.token, self.key)}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
         #TODO implement error handling for fail sends, return None on fail send
-        print(self.URL)
-        print(payload)
-        resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': randomKey()})
-        print(resp)
-        print(vars(resp))
+        #Post election with a hashed userID, preceded by vd to indicated a discord voter
+        hash = hashlib.sha256(str(userID).encode('utf-8')).hexdigest()
+        cookie = f"vd-{hash}"
+        resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
         return True
             
 
