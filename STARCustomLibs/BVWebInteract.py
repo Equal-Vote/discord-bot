@@ -21,6 +21,7 @@ class BVWebTranslator:
         self.token = None
         self.key = None
         self.URL = ""
+        self.electionID = ""
         self.API = "https://bettervoting.com/API/Election/"
 
         #list of all users who already voted (to avoid duplicate votes)
@@ -52,10 +53,12 @@ class BVWebTranslator:
             print("ERROR: assignElection called but election already assigned to this object")
             return
         #creates URL with electionID created at bettervoting.com
-        self.URL = self.API + electionID
+        self.electionID = electionID
+        self.URL = self.API + self.electionID
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
+        print(self.URL)
     #Get election JSON file
     def getElection(self) -> dict:
         if self.electJSON == None:
@@ -90,7 +93,7 @@ class BVWebTranslator:
         
         payload = {
             "ballot": {
-                "election_id": self.electJSON['election']['election_id'],
+                "election_id": self.electionID,
                 "votes": [
                     {
                         "race_id": self.electJSON['election']['races'][0]['race_id'],
@@ -102,11 +105,13 @@ class BVWebTranslator:
             },
         }
 
+        print(payload)
         #TODO implement error handling for fail sends, return None on fail send
         #Post election with a hashed userID, preceded by vd to indicated a discord voter
         hash = hashlib.sha256(str(userID).encode('utf-8')).hexdigest()
         cookie = f"vd-{hash}"
         resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
+        print(vars(resp))
         return True
             
 
