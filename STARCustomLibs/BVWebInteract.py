@@ -56,7 +56,6 @@ class BVWebTranslator:
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
-        print(self.electJSON)
     #Get election JSON file
     def getElection(self) -> dict:
         if self.electJSON == None:

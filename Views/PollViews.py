@@ -42,20 +42,21 @@ class InitBallot(discord.ui.View):
         #set up candidates as items in the UI
         self.candItems = []
         for i in range(len(self.candidates)):
-            print(i)
             self.candItems.append(Button(label=self.candidates[i]['candidate_name']))
             self.candItems[i].callback = self.button_callback
             self.add_item(self.candItems[i])
 
         #set up cast vote button
-        self.btn: discord.ui.button = (Button(label="Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
+        self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
         self.btn.callback= self.button_callback
         self.add_item(self.btn)
 
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
-        await interaction.response.send_message(view.description, view= view, ephemeral=True)
+        await interaction.followup.send(view.description, view= view, ephemeral=True)
 
 
 #translate emojis to integer scores
@@ -134,7 +135,7 @@ class Ballot(discord.ui.View):
         #nav and submit buttons
         self.navButtons: list = [
         Button(label = "◀️", style=discord.ButtonStyle.primary, row=4),
-        Button(label="_", style= discord.ButtonStyle.primary, row=4),
+        Button(label="Submit Ballot", style= discord.ButtonStyle.primary, row=4),
         Button(label="▶️", style= discord.ButtonStyle.primary, row=4)]
 
         self.navButtons[0].callback = self.prevCallback
@@ -167,7 +168,7 @@ class Ballot(discord.ui.View):
 
 
         #This button initiates voting
-        self.begin: Button = Button(label="Begin Voting", style= discord.ButtonStyle.primary)
+        self.begin: Button = Button(label="Click Here to Begin Voting", style= discord.ButtonStyle.primary)
         self.begin.callback = self.beginCallback
         self.add_item(self.begin)
                 
@@ -199,26 +200,25 @@ class Ballot(discord.ui.View):
     #TODO there is likely a slightly more efficient way to do this
     def refreshDropdowns(self):
         for child in self.pages[self.currentPage].children:
-            print(child)
             if isinstance(child, discord.ui.Select):
                 child.refreshDefault()
     async def prevCallback(self, interaction:discord.Interaction):
-        print(self.save.scores)
-        if self.currentPage == 0:
-            await interaction.response.defer(ephemeral=True)
-        else:
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        if not self.currentPage == 0:
             self.currentPage -= 1
             self.refreshDropdowns()
-            await interaction.response.edit_message(view=self.pages[self.currentPage])
+            await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def nextCallback(self, interaction:discord.Interaction):
-        print("nav forward")
-        if self.currentPage == self.lastPage:
-            await interaction.response.defer(ephemeral=True)
-        else:
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        if not self.currentPage == self.lastPage:
             self.currentPage += 1
             self.refreshDropdowns()
-            await interaction.response.edit_message(view=self.pages[self.currentPage])
+            await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def submitCallback(self, interaction:discord.Interaction):
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
@@ -228,10 +228,12 @@ class Ballot(discord.ui.View):
         
         #TODO implement responses for user already voted and failed to send vote
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
-        await interaction.response.edit_message(content=text, view=None)
+        await interaction.edit_original_response(content=text, view=None)
             
     async def beginCallback(self, interaction:discord.Interaction):
-        await interaction.response.edit_message(view=self.pages[0])
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        await interaction.edit_original_response(view=self.pages[0])
 
 
     #used for debugging
