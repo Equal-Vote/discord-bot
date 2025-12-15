@@ -1,12 +1,13 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 import jwt
 import asyncio
 import os
 from dotenv import load_dotenv
 
-from STARCustomLibs import BVWebInteract as BVI, DiscordBotAssist as DBA
+from STARCustomLibs import BVWebInteract as BVI
 from Views import PollViews
 
    
@@ -20,7 +21,7 @@ if __name__ == "__main__":
     intents.message_content = True
     intents.guilds = True
     bot = commands.Bot(intents=intents, command_prefix="?")
-    client = DBA.DisBotAssist(bot)
+    #tree = app_commands.CommandTree(bot)
 
     load_dotenv()
     TOKEN = os.getenv('DISCORD_TOKEN')
@@ -31,20 +32,32 @@ if __name__ == "__main__":
     elections: BVI.BVWebTranslator = {}
 
     #Command to get an election from better voting and begin voting in discord
-    #command syntax is ?createPoll [electionID]
-    @bot.command()
-    async def createPoll(ctx):
-        #get election ID from command, setup BVWebTranslator Object, add it to elections dict with electionID as key
-        electionID: str = client.getCommArg(str(ctx.message.content))
+    #command syntax is /linkpoll [electionID]
+    @bot.tree.command(
+        name="link_poll",
+        description="Link a poll from bettervoting.com using the electionID"
+    )
+    @app_commands.describe(
+        electionid="The ID of the poll to link"
+    )
+    async def link_poll(interaction: discord.Interaction, electionid: str):
         Translator: BVI.BVWebTranslator = BVI.BVWebTranslator()
         Translator.createToken("DisBot")
-        Translator.assignElection(electionID, Translator.token)
-        elections[electionID] = Translator
+        Translator.assignElection(electionid, Translator.token)
+        elections[electionid] = Translator
         
         #With election object created, create view and send message for ballot casting
-        view = PollViews.InitBallot(bot, elections[electionID].electJSON, Translator)
-        await ctx.send(embed = view.titleTXT, view=view)
-        
+        view = PollViews.InitBallot(bot, elections[electionid].electJSON, Translator)
+        await interaction.response.send_message(embed = view.titleTXT, view=view)
+
+    @bot.event
+    async def on_ready():
+        print("Syncing slash commands")
+        try:
+            await bot.tree.sync()
+            print("Slash commands synced")
+        except Exception as e:
+            print(f"Error syncing slash commands: {e}")
 
 
     bot.run(TOKEN)

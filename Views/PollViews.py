@@ -42,20 +42,21 @@ class InitBallot(discord.ui.View):
         #set up candidates as items in the UI
         self.candItems = []
         for i in range(len(self.candidates)):
-            print(i)
             self.candItems.append(Button(label=self.candidates[i]['candidate_name']))
             self.candItems[i].callback = self.button_callback
             self.add_item(self.candItems[i])
 
         #set up cast vote button
-        self.btn: discord.ui.button = (Button(label="Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
+        self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
         self.btn.callback= self.button_callback
         self.add_item(self.btn)
 
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
-        await interaction.response.send_message(view.description, view= view, ephemeral=True)
+        await interaction.followup.send(view.description, view= view, ephemeral=True)
 
 
 #translate emojis to integer scores
@@ -78,6 +79,9 @@ class Ballot(discord.ui.View):
             #candidate name
             self.candName = candName
             self.save = save
+
+            #has this dropdown been used before?
+            self.used = False
             
             options = []
             rankLabels = ["❌", "⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"]
@@ -92,13 +96,17 @@ class Ballot(discord.ui.View):
         async def callback(self, interaction: discord.Interaction):
             #this line seems to do nothing, but discord doesnt consider the interaction responded without it
             await interaction.response.defer(ephemeral=True)
+            #this dropdown has been used
+            self.used = True
             #save score
             self.save.scores[self.candNum] = self.values[0]
         #keeps option selects persistent in when navigating pages, otherwise it always goes back to X.
         #TODO this function causes pages to turn from blank to X when swiping left to right. Does not affect dropdowns already voted on
         def refreshDefault(self):
-            for i in self.options:
-                i.default = i.value == self.save.scores[self.candNum]
+            #this if statement ensures it just stays blank if it has not been interacted with yet
+            if self.used:
+                for i in self.options:
+                    i.default = i.value == self.save.scores[self.candNum]
 
     #class for one page in the menu
     class subView(discord.ui.View):
@@ -131,19 +139,17 @@ class Ballot(discord.ui.View):
         #save votes here so they are persistent when swiping left/right. This will also be used to send the vote
         self.save = self.saveData(len(candidates))
 
-        #used by navButtons
-        self.lastPage = len(self.candidates) - 1
-
         #nav and submit buttons
         self.navButtons: list = [
         Button(label = "◀️", style=discord.ButtonStyle.primary, row=4),
-        Button(label="_", style= discord.ButtonStyle.primary, row=4),
-        Button(label="▶️", style= discord.ButtonStyle.primary, row=4)]
+        Button(label="Submit Ballot", style= discord.ButtonStyle.primary, row=4),
+        Button(label="▶️", style= discord.ButtonStyle.primary, row=4),
+        Button(label="", row=4)]
 
         self.navButtons[0].callback = self.prevCallback
         self.navButtons[2].callback = self.nextCallback
         self.navButtons[1].callback = self.submitCallback
-
+        self.navButtons[3].callback = self.pageCounterCallback
 
         #A 2D array that will contain the content of each page
         self.pages: View = []
@@ -156,7 +162,7 @@ class Ballot(discord.ui.View):
         for i in range(len(self.candidates)):
             tempPage.append(self.rankMenu(i, self.candidates[i]['candidate_name'], self.save))
             temp += 1
-            if temp == 4 or i == self.lastPage:
+            if temp == 4 or i == (len(self.candidates) - 1):
                 temp = 0
                 self.pages.append(self.subView(tempPage))
                 tempPage = []
@@ -164,10 +170,18 @@ class Ballot(discord.ui.View):
         for i in range(len(self.pages)):
             for j in self.navButtons:
                 self.pages[i].add_item(j)
+        
+        #used by navButtons
+        self.lastPage = len(self.pages) - 1
 
+        #Has the last page ever been hit
+        self.allSeen = False
+        #set correct labels for nav buttons
+        #this is called here since the current and last page variables are needed
+        self.setNavs()
 
         #This button initiates voting
-        self.begin: Button = Button(label="Begin Voting", style= discord.ButtonStyle.primary)
+        self.begin: Button = Button(label="Click Here to Begin Voting", style= discord.ButtonStyle.primary)
         self.begin.callback = self.beginCallback
         self.add_item(self.begin)
                 
@@ -176,24 +190,26 @@ class Ballot(discord.ui.View):
 
     #Change pages
     #set nav buttons based on what page we are on
-    #TODO clean this up and use it
-    def setNavs(self, page: int):
-        if page == 0:
-            navButtons[0].disabled = True
-            navButtons[1].disabled = False
-            navButtons[2].disabled = True
-            navButtons[2].label = ""
-        elif page == (len(self.pages) - 1):
-            navButtons[0].disabled = False
-            navButtons[1].disabled = True
-            navButtons[2].disabled = False
-            navButtons[2].label = "Submit Ballot"
-        else:
-            navButtons[0].disabled = False
-            navButtons[1].disabled = False
-            navButtons[2].disabled = True
-            navButtons[2].label = ""
+    #TODO disable and enable left and right buttons as well
+    def setNavs(self):
+        #disable submit button until last page has been viewed
+        if self.currentPage == self.lastPage:
+            self.allSeen = True
 
+        if self.allSeen:
+            self.navButtons[1].label = "Click Here to Submit Ballot"
+            self.navButtons[1].disabled = False
+            self.navButtons[1].style = discord.ButtonStyle.primary
+            self.allSeen = True
+        else:
+            self.navButtons[1].label = "View All Pages Before Submitting"
+            self.navButtons[1].disabled = True
+            self.navButtons[1].style = discord.ButtonStyle.secondary
+
+        #Page counter update
+        self.navButtons[3].label = f"Page {str(self.currentPage + 1)}/{str(self.lastPage + 1)}"
+
+        
 
     #callbacks for buttons
     #TODO there is likely a slightly more efficient way to do this
@@ -201,40 +217,52 @@ class Ballot(discord.ui.View):
         for child in self.pages[self.currentPage].children:
             if isinstance(child, discord.ui.Select):
                 child.refreshDefault()
+        self.setNavs()
     async def prevCallback(self, interaction:discord.Interaction):
-        print(self.save.scores)
-        if self.currentPage == 0:
-            await interaction.response.defer(ephemeral=True)
-        else:
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        if not self.currentPage == 0:
             self.currentPage -= 1
             self.refreshDropdowns()
-            await interaction.response.edit_message(view=self.pages[self.currentPage])
+            await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def nextCallback(self, interaction:discord.Interaction):
-        print("nav forward")
-        if self.currentPage == self.lastPage:
-            await interaction.response.defer(ephemeral=True)
-        else:
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        if not self.currentPage == self.lastPage:
             self.currentPage += 1
             self.refreshDropdowns()
-            await interaction.response.edit_message(view=self.pages[self.currentPage])
+            await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def submitCallback(self, interaction:discord.Interaction):
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
         text = "You voted: \n"
         for i in range(len(self.candidates)):
             text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
+
+        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
+        text = f"{text} See results at {URL}"
         
         #TODO implement responses for user already voted and failed to send vote
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
-        await interaction.response.edit_message(content=text, view=None)
+        await interaction.edit_original_response(content=text, view=None)
             
     async def beginCallback(self, interaction:discord.Interaction):
-        await interaction.response.edit_message(view=self.pages[0])
+        #respond immeditately, interactions fail if not responded to in 3 seconds
+        await interaction.response.defer(ephemeral=True)
+        await interaction.edit_original_response(view=self.pages[0])
+    async def pageCounterCallback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
 
 
-            
-
+    #used for debugging
+    def debugPages(self):
+        print("page debug")
+        print(self.currentPage)
+        print(self.lastPage)
+        print(len(self.pages))
 
 
 
