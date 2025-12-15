@@ -131,9 +131,6 @@ class Ballot(discord.ui.View):
         #save votes here so they are persistent when swiping left/right. This will also be used to send the vote
         self.save = self.saveData(len(candidates))
 
-        #used by navButtons
-        self.lastPage = len(self.candidates) - 1
-
         #nav and submit buttons
         self.navButtons: list = [
         Button(label = "◀️", style=discord.ButtonStyle.primary, row=4),
@@ -156,7 +153,7 @@ class Ballot(discord.ui.View):
         for i in range(len(self.candidates)):
             tempPage.append(self.rankMenu(i, self.candidates[i]['candidate_name'], self.save))
             temp += 1
-            if temp == 4 or i == self.lastPage:
+            if temp == 4 or i == (len(self.candidates) - 1):
                 temp = 0
                 self.pages.append(self.subView(tempPage))
                 tempPage = []
@@ -164,6 +161,9 @@ class Ballot(discord.ui.View):
         for i in range(len(self.pages)):
             for j in self.navButtons:
                 self.pages[i].add_item(j)
+        
+        #used by navButtons
+        self.lastPage = len(self.pages) - 1
 
 
         #This button initiates voting
@@ -199,6 +199,7 @@ class Ballot(discord.ui.View):
     #TODO there is likely a slightly more efficient way to do this
     def refreshDropdowns(self):
         for child in self.pages[self.currentPage].children:
+            print(child)
             if isinstance(child, discord.ui.Select):
                 child.refreshDefault()
     async def prevCallback(self, interaction:discord.Interaction):
@@ -233,8 +234,12 @@ class Ballot(discord.ui.View):
         await interaction.response.edit_message(view=self.pages[0])
 
 
-            
-
+    #used for debugging
+    def debugPages(self):
+        print("page debug")
+        print(self.currentPage)
+        print(self.lastPage)
+        print(len(self.pages))
 
 
 
