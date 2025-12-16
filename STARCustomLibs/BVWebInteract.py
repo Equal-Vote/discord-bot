@@ -105,13 +105,11 @@ class BVWebTranslator:
             },
         }
 
-        print(payload)
         #TODO implement error handling for fail sends, return None on fail send
         #Post election with a hashed userID, preceded by vd to indicated a discord voter
         hash = hashlib.sha256(str(userID).encode('utf-8')).hexdigest()
         cookie = f"vd-{hash}"
         resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
-        print(vars(resp))
         return True
             
 

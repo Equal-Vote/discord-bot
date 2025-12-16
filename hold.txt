@@ -1,2 +1,0 @@
-self.titleTXT = (discord.ui.Label(text=f"{self.title}\n{self.description}"))
-        self.add_item(self.titleTXT)
