@@ -7,7 +7,7 @@ Please also see the READ ME in the .venv folder before editing code
 
 1. Enable Developer Mode for your User: User Gear -> App Settings -> Advanced -> Developer Mode
 1. [Add bot to server where you have admin access](https://discord.com/oauth2/authorize?client_id=1019135068805005333&permissions=534723950656&scope=bot%20applications.commands)
-1. Reference [bettervoting.py](https://github.com/Equal-Vote/discord-bot/blob/main/main.py) for commands (example: ``.list_star_candidates "Yoda" "Han Solo"``)
+1. Reference [main.py](https://github.com/Equal-Vote/discord-bot/blob/main/main.py) for commands (example: ``.list_star_candidates "Yoda" "Han Solo"``)
 
 
 ## Running Personal Instance
