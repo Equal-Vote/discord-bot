@@ -28,7 +28,7 @@ def prepView(BVIObject) -> dict:
 #View for message that will initiate ballot casting. This shows title, desc, options, and the cast vote button. This is not the ballot itself
 class InitBallot(discord.ui.View):
     def __init__(self, bot: commands.bot, data: dict, BVIObject):
-        super().__init__()
+        super().__init__(timeout=None)
         self.bot = bot
         self.BVIObject = BVIObject
 
@@ -127,7 +127,7 @@ class Ballot(discord.ui.View):
 
     #init for Ballot
     def __init__(self, bot:commands.bot, title:str, candidates:dict, BVIObject, description:str = "Not scoring is the same as scoring 0. Feel free to skip candidates you don't know and to score multiple candidates the same", timeout: float = 300.0):
-        super().__init__()
+        super().__init__(timeout=900)
         self.bot = bot
         self.BVIObject = BVIObject
         self.title = title
