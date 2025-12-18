@@ -179,14 +179,15 @@ class Ballot(discord.ui.View):
         #set correct labels for nav buttons
         #this is called here since the current and last page variables are needed
         self.setNavs()
+        self.refreshDropdowns()
 
-        #This button initiates voting
-        self.begin: Button = Button(label="Click Here to Begin Voting", style= discord.ButtonStyle.primary)
-        self.begin.callback = self.beginCallback
-        self.add_item(self.begin)
+        #start view
+        for i in self.pages[0].children:
+            self.add_item(i)
                 
 
         
+    #The below are functions relating to changing pages
 
     #Change pages
     #set nav buttons based on what page we are on
@@ -208,16 +209,17 @@ class Ballot(discord.ui.View):
 
         #Page counter update
         self.navButtons[3].label = f"Page {str(self.currentPage + 1)}/{str(self.lastPage + 1)}"
-
-        
-
-    #callbacks for buttons
-    #TODO there is likely a slightly more efficient way to do this
+    #refresh dropdown menus
     def refreshDropdowns(self):
         for child in self.pages[self.currentPage].children:
             if isinstance(child, discord.ui.Select):
                 child.refreshDefault()
         self.setNavs()
+
+        
+
+    #callbacks for buttons
+    #TODO there is likely a slightly more efficient way to do this
     async def prevCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await interaction.response.defer(ephemeral=True)
@@ -248,11 +250,6 @@ class Ballot(discord.ui.View):
         #TODO implement responses for user already voted and failed to send vote
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
         await interaction.edit_original_response(content=text, view=None)
-            
-    async def beginCallback(self, interaction:discord.Interaction):
-        #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
-        await interaction.edit_original_response(view=self.pages[0])
     async def pageCounterCallback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
