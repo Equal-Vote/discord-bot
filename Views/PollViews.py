@@ -1,11 +1,20 @@
 #This file contains views relating to polls. Views are objects in the discord API that house buttons and other advanced graphics
 import json
+import os
+from dotenv import load_dotenv
+from datetime import datetime
+
 
 import discord
 from discord.ui import Button, View
 from discord.ext import commands
 
+from STARCustomLibs import PunkinLogging
+
 #TODO have these each created once when a new election is made, not every time a ballot is made
+
+load_dotenv()
+logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.now()}.txt")
 
 #get data set up in a dictionary to prep for pollViews
 #takes a BVWebTranslator object and returns the relevant data from its JSON
@@ -54,7 +63,7 @@ class InitBallot(discord.ui.View):
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
+        await deferInt(interaction)
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
         await interaction.followup.send(view.description, view= view, ephemeral=True)
 
@@ -95,7 +104,7 @@ class Ballot(discord.ui.View):
         #called when option is selected
         async def callback(self, interaction: discord.Interaction):
             #this line seems to do nothing, but discord doesnt consider the interaction responded without it
-            await interaction.response.defer(ephemeral=True)
+            await deferInt(interaction)
             #this dropdown has been used
             self.used = True
             #save score
@@ -179,14 +188,15 @@ class Ballot(discord.ui.View):
         #set correct labels for nav buttons
         #this is called here since the current and last page variables are needed
         self.setNavs()
+        self.refreshDropdowns()
 
-        #This button initiates voting
-        self.begin: Button = Button(label="Click Here to Begin Voting", style= discord.ButtonStyle.primary)
-        self.begin.callback = self.beginCallback
-        self.add_item(self.begin)
+        #start view
+        for i in self.pages[0].children:
+            self.add_item(i)
                 
 
         
+    #The below are functions relating to changing pages
 
     #Change pages
     #set nav buttons based on what page we are on
@@ -208,33 +218,34 @@ class Ballot(discord.ui.View):
 
         #Page counter update
         self.navButtons[3].label = f"Page {str(self.currentPage + 1)}/{str(self.lastPage + 1)}"
-
-        
-
-    #callbacks for buttons
-    #TODO there is likely a slightly more efficient way to do this
+    #refresh dropdown menus
     def refreshDropdowns(self):
         for child in self.pages[self.currentPage].children:
             if isinstance(child, discord.ui.Select):
                 child.refreshDefault()
         self.setNavs()
+
+        
+
+    #callbacks for buttons
+    #TODO there is likely a slightly more efficient way to do this
     async def prevCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
+        await deferInt(interaction)
         if not self.currentPage == 0:
             self.currentPage -= 1
             self.refreshDropdowns()
             await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def nextCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
+        await deferInt(interaction)
         if not self.currentPage == self.lastPage:
             self.currentPage += 1
             self.refreshDropdowns()
             await interaction.edit_original_response(view=self.pages[self.currentPage])
     async def submitCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
+        await deferInt(interaction)
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
@@ -248,13 +259,8 @@ class Ballot(discord.ui.View):
         #TODO implement responses for user already voted and failed to send vote
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
         await interaction.edit_original_response(content=text, view=None)
-            
-    async def beginCallback(self, interaction:discord.Interaction):
-        #respond immeditately, interactions fail if not responded to in 3 seconds
-        await interaction.response.defer(ephemeral=True)
-        await interaction.edit_original_response(view=self.pages[0])
     async def pageCounterCallback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await deferInt(interaction)
 
 
     #used for debugging
@@ -265,7 +271,8 @@ class Ballot(discord.ui.View):
         print(len(self.pages))
 
 
-
-
-    
+async def deferInt(interaction: discord.Interaction):
+    logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
+    await interaction.response.defer(ephemeral=True)
+    logger.log(f"Responded to interaction, it is now {datetime.now()}", False, False)
         
