@@ -18,14 +18,15 @@ def randomKey():
 class BVWebTranslator:
     def __init__(self):
         self.electJSON = None
+        self.resultsJSON = None
+        self.winner = ""
         self.token = None
         self.key = None
         self.URL = ""
         self.electionID = ""
-        self.API = "https://bettervoting.com/API/Election/"
+        self.API = "https://bettervoting.com/API"
 
-        #list of all users who already voted (to avoid duplicate votes)
-        self.voted =[]
+        
         pass
         
     #Functions related to generating keys
@@ -54,7 +55,7 @@ class BVWebTranslator:
             return
         #creates URL with electionID created at bettervoting.com
         self.electionID = electionID
-        self.URL = self.API + self.electionID
+        self.URL = self.API + "/Election/" + self.electionID
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
@@ -65,6 +66,13 @@ class BVWebTranslator:
             print("ERROR: getElection called but no election assigned to this object")
         else:
             return self.electJSON
+    #update results
+    def updateResults(self) -> None:
+        url = f"{self.API}/ElectionResult/{self.electionID}"
+        resp = requests.get(url)
+        self.resultsJSON = json.loads(resp.text)
+        self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
+
 
 
     #functions for submitting ballots
@@ -72,18 +80,13 @@ class BVWebTranslator:
     #note this isnt inter platform. There is an exploit where a user could vote on the website then again on another platform
     #The only current way around this is to make elections private and only call the election with your bot on your platform
     def alreadyVoted(self, user_id: str):
-        for i in self.voted:
-            if i == user_id:
-                return True
-        
-        return False
+        pass
     
     #give score and discord user id to this function. It will submit the ballot and add the user to the already voted list. 
     #returns False if user already voted, True on success, and None on an error
     def submitBallot(self, userID: str, scores: list) -> bool:
         #if the user already voted, return False. The vote should not be counted
-        if self.alreadyVoted(userID):
-            return False
+        #put something here
 
         #if the user didnt already vote, prepare their ballot for submission to BV
         candScores: list = []

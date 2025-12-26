@@ -59,6 +59,9 @@ class InitBallot(discord.ui.View):
         self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
         self.btn.callback= self.button_callback
         self.add_item(self.btn)
+        self.results: discord.ui.button = Button(label="Click Here to See Current Leader", style=discord.ButtonStyle.primary, row=2)
+        self.results.callback = self.seeCurrentResults
+        self.add_item(self.results)
 
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
@@ -66,6 +69,13 @@ class InitBallot(discord.ui.View):
         await deferInt(interaction)
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
         await interaction.followup.send(view.description, view= view, ephemeral=True)
+    
+    #Send ephemeral message with current leader
+    async def seeCurrentResults(self, interaction:discord.Interaction):
+        await deferInt(interaction)
+        self.BVIObject.updateResults()
+        await interaction.followup.send(f"The current leader is {self.BVIObject.winner}", ephemeral=True)
+
 
 
 #translate emojis to integer scores
@@ -246,6 +256,7 @@ class Ballot(discord.ui.View):
     async def submitCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
+        #prepare scores
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
@@ -253,11 +264,16 @@ class Ballot(discord.ui.View):
         for i in range(len(self.candidates)):
             text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
 
-        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
-        text = f"{text} See results at {URL}"
-        
         #TODO implement responses for user already voted and failed to send vote
+        #Submit ballot
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
+
+        #Show current leader and link to better voting for more
+        self.BVIObject.updateResults()
+        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
+        text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+        
+        #Send confirmation
         await interaction.edit_original_response(content=text, view=None)
     async def pageCounterCallback(self, interaction: discord.Interaction):
         await deferInt(interaction)
@@ -270,7 +286,7 @@ class Ballot(discord.ui.View):
         print(self.lastPage)
         print(len(self.pages))
 
-
+#defer an interaction
 async def deferInt(interaction: discord.Interaction):
     logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
     await interaction.response.defer(ephemeral=True)
