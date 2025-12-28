@@ -8,6 +8,8 @@ import os
 import schedule
 from dotenv import load_dotenv
 
+import sqlite3
+
 from STARCustomLibs import BVWebInteract as BVI, PunkinLogging
 from Views import PollViews
 
@@ -16,6 +18,7 @@ from Views import PollViews
 #TODO implement error handling
 #TODO deintegrate DiscordBotAssist
 if __name__ == "__main__":
+    print("Preparing Bot")
     #create bot and assign it to DiscordBotAssist, as well as toggle the TOKEN.
     intents = discord.Intents.default()
     intents.message_content = True
@@ -42,22 +45,36 @@ if __name__ == "__main__":
         electionid="The ID of the poll to link"
     )
     async def link_poll(interaction: discord.Interaction, electionid: str):
+        #With election object created, create view and send message for ballot casting. Then save the data to the database to be pulled after redeploy
+        view = await pollLink(interaction, electionid)
+        msg = await interaction.response.send_message(embed = view.titleTXT, view=view)
+        view.saveToSQL(msg.message_id, interaction.channel_id)
+
+    async def pollLink(interaction: discord.Interaction, electionid: str) -> discord.ui.View:
         Translator: BVI.BVWebTranslator = BVI.BVWebTranslator()
         Translator.createToken("DisBot")
         try:
-            Translator.assignElection(electionid, Translator.token)
+            Translator.assignElection(electionid)
         except:
             interaction.response.send_message("Oops! That is not a valid election ID")
         elections[electionid] = Translator
         
-        #With election object created, create view and send message for ballot casting
+        #With election object created, create view and send message for ballot casting. Then save the data to the database to be pulled after redeploy
         view = PollViews.InitBallot(bot, elections[electionid].electJSON, Translator)
         views[electionid] = view
-        await interaction.response.send_message(embed = view.titleTXT, view=view)
+        return view
 
+    @bot.event
+    async def on_message(message: discord.Message):
+        #Is message from self or is the message not a poll? If so ignore it
+        #Bot never does the standard check if the message is from itself as it should not send discord native polls
+        if message.poll == None:
+            return
+    
 
     @bot.event
     async def on_ready():
+        print("Bot is online")
         print("Syncing slash commands")
         try:
             await bot.tree.sync()
@@ -65,6 +82,26 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error syncing slash commands: {e}")
             exit(1)
+        
+        print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
+        #TODO safeguard against rate limiting
+        if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
+            database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
+            db = database.cursor()
+            db.execute("SELECT * FROM InitBallots")
+            rows = db.fetchall()
+            print(rows)
+
+            msg: discord.Message = None
+            Translator: BVI.BVWebTranslator = None
+            for i in range(len(rows)):
+                msg = await bot.get_channel(rows[i][1]).fetch_message(rows[i][0])
+                view = await pollLink(None, rows[i][2])
+                await msg.edit(view=view)
+            print("Persistent views synced. Prior InitBallots are usable")   
+        else:
+            print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
+        
 
     bot.run(TOKEN)
     

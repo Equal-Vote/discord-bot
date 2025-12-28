@@ -49,7 +49,7 @@ class BVWebTranslator:
     #Functions related to getting elections
 
     #Assign this object an election, should only be used once per object
-    def assignElection(self, electionID: str, key:str) -> None:
+    def assignElection(self, electionID: str) -> None:
         if not self.electJSON == None:
             print("ERROR: assignElection called but election already assigned to this object")
             return
@@ -72,6 +72,13 @@ class BVWebTranslator:
         resp = requests.get(url)
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
+
+    #Creating an election
+    #unfinished DO NOT USE
+    def createElection(self, title: str, description: str = "") -> None:
+        url = f"{self.API}/Elections"
+
+        payload = {}
 
 
 
