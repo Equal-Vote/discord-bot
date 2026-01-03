@@ -3,18 +3,25 @@ import json
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import time
 
 
 import discord
 from discord.ui import Button, View
 from discord.ext import commands
 
-from STARCustomLibs import PunkinLogging
+import sqlite3
+
+from STARCustomLibs import PunkinLogging, BVWebInteract as BVI
 
 #TODO have these each created once when a new election is made, not every time a ballot is made
 
 load_dotenv()
 logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.now()}.txt")
+database = sqlite3.connect(os.getenv('BOT_DATABASE_PATH'))
+database = database.cursor()
+#Time is never null, even when election expires, as a failsafe
+database.execute("CREATE TABLE IF NOT EXISTS InitBallots (messageID INTEGER NOT NULL, channelID INTEGER NOT NULL, electionID TEXT NOT NULL, time INTEGER NOT NULL)")
 
 #get data set up in a dictionary to prep for pollViews
 #takes a BVWebTranslator object and returns the relevant data from its JSON
@@ -32,11 +39,16 @@ def prepView(BVIObject) -> dict:
     retData["candidates"] = candidates
 
     return retData
+#defer an interaction
+async def deferInt(interaction: discord.Interaction):
+    logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
+    await interaction.response.defer(ephemeral=True)
+    logger.log(f"Responded to interaction, it is now {datetime.now()}", False, False)
 
-#TODO implement cleaner UI for user
+
 #View for message that will initiate ballot casting. This shows title, desc, options, and the cast vote button. This is not the ballot itself
 class InitBallot(discord.ui.View):
-    def __init__(self, bot: commands.bot, data: dict, BVIObject):
+    def __init__(self, bot: commands.bot, data: dict, BVIObject: BVI.BVWebTranslator):
         super().__init__(timeout=None)
         self.bot = bot
         self.BVIObject = BVIObject
@@ -59,6 +71,11 @@ class InitBallot(discord.ui.View):
         self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
         self.btn.callback= self.button_callback
         self.add_item(self.btn)
+        self.results: discord.ui.button = Button(label="Click Here to See Current Leader", style=discord.ButtonStyle.primary, row=2)
+        self.results.callback = self.seeCurrentResults
+        self.add_item(self.results)
+
+        
 
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
@@ -66,6 +83,19 @@ class InitBallot(discord.ui.View):
         await deferInt(interaction)
         view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
         await interaction.followup.send(view.description, view= view, ephemeral=True)
+    
+    #Send ephemeral message with current leader
+    async def seeCurrentResults(self, interaction:discord.Interaction):
+        await deferInt(interaction)
+        self.BVIObject.updateResults()
+        await interaction.followup.send(f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details", ephemeral=True)
+
+    #Save data to database
+    def saveToSQL(self, messageId: str, channelId: str) -> None:
+        database.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
+        database.connection.commit()
+        print("Committed to database")
+
 
 
 #translate emojis to integer scores
@@ -246,6 +276,7 @@ class Ballot(discord.ui.View):
     async def submitCallback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
+        #prepare scores
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
@@ -253,11 +284,16 @@ class Ballot(discord.ui.View):
         for i in range(len(self.candidates)):
             text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
 
-        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
-        text = f"{text} See results at {URL}"
-        
         #TODO implement responses for user already voted and failed to send vote
+        #Submit ballot
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
+
+        #Show current leader and link to better voting for more
+        self.BVIObject.updateResults()
+        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
+        text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+        
+        #Send confirmation
         await interaction.edit_original_response(content=text, view=None)
     async def pageCounterCallback(self, interaction: discord.Interaction):
         await deferInt(interaction)
@@ -271,8 +307,19 @@ class Ballot(discord.ui.View):
         print(len(self.pages))
 
 
-async def deferInt(interaction: discord.Interaction):
-    logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
-    await interaction.response.defer(ephemeral=True)
-    logger.log(f"Responded to interaction, it is now {datetime.now()}", False, False)
+#Sent after discord native poll is sent. Clicking the button deletes the poll and makes a STAR poll with that data
+class turnToBV(discord.ui.View):
+    def __init__(self, message: discord.Message):
+        self.message:discord.Message = message
+        self.btn = Button(label="Click Here to Turn Into a STAR Poll", style=discord.ButtonStyle.primary)
+        self.btn.callback = self.callback
+        self.add_item(self.btn)
+
+        #delete self after 5 minutes to avoid clutter
+        sleep(300)
+
+    async def callback(self, interaction: discord.Interaction):
+        await deferInt(interaction)
+        
+
         
