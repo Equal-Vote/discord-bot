@@ -74,15 +74,8 @@ if __name__ == "__main__":
 
     @bot.event
     async def on_ready():
-        print("Bot is online")
-        print("Syncing slash commands")
-        try:
-            await bot.tree.sync()
-            print("Slash commands synced")
-        except Exception as e:
-            print(f"Error syncing slash commands: {e}")
-            exit(1)
-        
+        await bot.change_presence(status= discord.Status.invisible)
+        print("Logged into discord. Appearing offline until ready.")
         print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
         if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
@@ -90,7 +83,6 @@ if __name__ == "__main__":
             db = database.cursor()
             db.execute("SELECT * FROM InitBallots")
             rows = db.fetchall()
-            print(rows)
 
             msg: discord.Message = None
             Translator: BVI.BVWebTranslator = None
@@ -101,6 +93,17 @@ if __name__ == "__main__":
             print("Persistent views synced. Prior InitBallots are usable")   
         else:
             print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
+        
+        print("Syncing slash commands")
+        try:
+            await bot.tree.sync()
+            print("Slash commands synced")
+        except Exception as e:
+            print(f"Error syncing slash commands: {e}")
+            exit(1)
+        
+        await bot.change_presence(status=discord.Status.online)
+        print("Bot is fully ready. Appearing online")
         
 
     bot.run(TOKEN)
