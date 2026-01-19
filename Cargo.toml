@@ -1,0 +1,12 @@
+[package]
+name = "discord-bot-main"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusqlite = "0.38.0"
+dotenv = "0.15.0"
+
+[[bin]]
+name = "databaseFailsafe"
+path = "databaseFailsafe.rs"

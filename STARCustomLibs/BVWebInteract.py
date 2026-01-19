@@ -6,6 +6,9 @@ import requests
 import json
 import time
 import hashlib
+import datetime
+import random
+import string
 
 
 
@@ -25,7 +28,8 @@ class BVWebTranslator:
         self.URL = ""
         self.electionID = ""
         self.API = "https://bettervoting.com/API"
-
+        #all user Ids start with this so it is easy to identify what source ballots come from
+        self.cookieLead = ""
         
         pass
         
@@ -59,6 +63,7 @@ class BVWebTranslator:
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
+        print(self.electJSON)
     #Get election JSON file
     def getElection(self) -> dict:
         if self.electJSON == None:
@@ -69,15 +74,74 @@ class BVWebTranslator:
     def updateResults(self) -> None:
         url = f"{self.API}/ElectionResult/{self.electionID}"
         resp = requests.get(url)
+        print(f"vars resp{vars(resp)}")
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
 
     #Creating an election
     #unfinished DO NOT USE
-    def createElection(self, title: str, description: str = "") -> None:
+    def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
+        #URL for creating election
         url = f"{self.API}/Elections"
+        self.electionID = self.randomChars(6)
 
-        payload = {}
+        #TODO safeguard against duplicate candidate ids
+        #prepare candidate list for API
+        cands: list = []
+        for i in candidates:
+            cands.append({
+                            "candidate_id": f"c-{self.randomChars(3)}",
+                            "candidate_name": i,
+                        })
+
+        #prepare payload
+        payload = {
+            "Election":{
+                "end_time": str(endTime),
+                "owner_id": str(self.hashUser(userID)),
+                "is_public": False,
+                "races": [
+                    {
+                        "candidates": cands,
+                        "num_winners": 1,
+                        "precincts": [
+                        {
+                            "length": 0
+                        }
+                        ],
+                        "race_id": f"r-{self.randomChars(3)}",
+                        "title": question,
+                        "voting_method": "STAR"
+                    }
+                ],
+                "title": question,
+                "settings": {
+                    "voter_access": "open",
+                    "voter_authentication": {
+                        "address": False,
+                        "email": False,
+                        "ip_address": False,
+                        "phone": False,
+                        "voter_id": False
+                    },
+                },
+            },
+        }
+
+        #send payload
+        resp = requests.post(url=url, json= payload)
+        print(vars(resp))
+
+        resp = resp.json()
+        #TODO account for fail sends
+
+        self.electionID = resp['election']['election_id']
+        print(f"elect id {self.electionID}")
+        #assign self the election just created
+        self.assignElection(self.electionID)
+        #print(self.electJSON)
+        
+
 
 
 
@@ -116,10 +180,18 @@ class BVWebTranslator:
 
         #TODO implement error handling for fail sends, return None on fail send
         #Post election with a hashed userID, preceded by vd to indicated a discord voter
-        hash = hashlib.sha256(str(userID).encode('utf-8')).hexdigest()
-        cookie = f"vd-{hash}"
+        cookie = self.hashUser(userID)
         resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
         return True
+
+    
+    #for hashing userIDs
+    def hashUser(self, userID):
+        hash = hashlib.sha256(str(userID).encode('utf-8')).hexdigest()
+        cookie = f"{self.cookieLead}{hash}"
+        return cookie
+    def randomChars(self, chars: int):
+        return ''.join(random.choices(string.ascii_letters + string.digits, k=chars))
             
 
         
