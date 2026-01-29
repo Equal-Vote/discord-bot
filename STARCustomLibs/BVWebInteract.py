@@ -10,8 +10,6 @@ import datetime
 import random
 import string
 
-
-
 #generate a truly random 32 byte key for secure tokens
 def randomKey():
     return secrets.token_hex(32)
@@ -100,15 +98,11 @@ class BVWebTranslator:
                 "end_time": str(endTime),
                 "owner_id": str(self.hashUser(userID)),
                 "is_public": False,
+                "state": "open",
                 "races": [
                     {
                         "candidates": cands,
                         "num_winners": 1,
-                        "precincts": [
-                        {
-                            "length": 0
-                        }
-                        ],
                         "race_id": f"r-{self.randomChars(3)}",
                         "title": question,
                         "voting_method": "STAR"
@@ -124,12 +118,14 @@ class BVWebTranslator:
                         "phone": False,
                         "voter_id": False
                     },
+                    "public_results": True,
                 },
             },
         }
 
         #send payload
         resp = requests.post(url=url, json= payload)
+        print(resp)
         print(vars(resp))
 
         resp = resp.json()
@@ -148,16 +144,34 @@ class BVWebTranslator:
     #functions for submitting ballots
     #did this user already vote
     #note this isnt inter platform. There is an exploit where a user could vote on the website then again on another platform
-    #The only current way around this is to make elections private and only call the election with your bot on your platform
-    def alreadyVoted(self, user_id: str):
+    def alreadyVoted(self, user_id: str) -> bool:
+        print("alr vot func", flush= True)
+        hashedID = self.hashUser(user_id)
+        print(f"{self.API}/Election/{self.electionID}/ballots")
+        resp = requests.get(f"{self.API}/Election/{self.electionID}", cookies={'user_id': hashedID})
+        print(resp)
+        print(vars(resp))
+
+        #if so return True, if not False, None on error
+        if resp.status_code == 200:
+            return True
+        elif resp.status_code == 400:
+            return False
+        return None
+    #get ballot, usually used to show user their ballot if they double vote attempt
+    def getBallot(self, userID):
         pass
     
     #give score and discord user id to this function. It will submit the ballot and add the user to the already voted list. 
     #returns False if user already voted, True on success, and None on an error
     def submitBallot(self, userID: str, scores: list) -> bool:
         #if the user already voted, return False. The vote should not be counted
-        #put something here
-
+        alrVote = self.alreadyVoted(userID)
+        if alrVote:
+            return False
+        elif alrVote == None:
+            return None
+        
         #if the user didnt already vote, prepare their ballot for submission to BV
         candScores: list = []
         candidates = self.electJSON['election']['races'][0]['candidates']
@@ -182,7 +196,12 @@ class BVWebTranslator:
         #Post election with a hashed userID, preceded by vd to indicated a discord voter
         cookie = self.hashUser(userID)
         resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
-        return True
+        print("THIS IS A BALLOT!!!!!!!")
+        print(resp)
+        print(vars(resp))
+        print('payload')
+        print(payload)
+        return self.successSend(resp, True)
 
     
     #for hashing userIDs
@@ -192,6 +211,12 @@ class BVWebTranslator:
         return cookie
     def randomChars(self, chars: int):
         return ''.join(random.choices(string.ascii_letters + string.digits, k=chars))
+    def successSend(self, resp, noneOnFail: bool):
+        if resp.status_code == 200:
+            return True
+        if noneOnFail:
+            return None
+        return False
             
 
         

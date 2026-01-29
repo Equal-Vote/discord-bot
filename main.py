@@ -71,7 +71,7 @@ if __name__ == "__main__":
     @bot.event
     async def on_message(message: discord.Message):
         #this functionality isnt ready yet
-        return
+        #return
         #Is message from self or is the message not a poll? If so ignore it
         #Bot never does the standard check if the message is from itself as it should not send discord native polls
         if message.poll == None:
@@ -117,20 +117,10 @@ if __name__ == "__main__":
         await bot.change_presence(status=discord.Status.online)
         print("Bot is fully ready. Appearing online")
     
-    def databaseFailsafe():
-        #run databaseFailsafe twice a day
-        while True:
-            subprocess.run(["./databaseFailsafe"])
-            time.sleep(43200)
+    
+            
     #run bot and database failsafe
-    #botRun = multiprocessing.Process(runBot)
-    failsafe = multiprocessing.Process(target=databaseFailsafe)
-    failsafe.start()
+    #failsafe = multiprocessing.Process(target=databaseFailsafe)
+    #failsafe.start()
 
     bot.run(TOKEN)
-
-    
-        
-    
-
-

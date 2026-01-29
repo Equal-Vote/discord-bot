@@ -14,6 +14,8 @@ import sqlite3
 
 from STARCustomLibs import PunkinLogging, BVWebInteract as BVI
 
+import sys; sys.stdout = sys.stderr
+
 #TODO have these each created once when a new election is made, not every time a ballot is made
 
 load_dotenv()
@@ -81,8 +83,11 @@ class InitBallot(discord.ui.View):
     async def button_callback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
-        view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
-        await interaction.followup.send(view.description, view= view, ephemeral=True)
+        if self.BVIObject.alreadyVoted(interaction.user.id):
+            await interaction.followup.send("You have already voted in this election", ephemeral=True)
+        else:
+            view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
+            await interaction.followup.send(view.description, view= view, ephemeral=True)
     
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
@@ -279,18 +284,26 @@ class Ballot(discord.ui.View):
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
-        text = "You voted: \n"
-        for i in range(len(self.candidates)):
-            text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
+        
 
         #TODO implement responses for user already voted and failed to send vote
-        #Submit ballot
+        #Submit ballot, or handle errors
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
+        if switch:
+            #Show current leader, a ballot copy, and link to better voting for more
+            text = "You voted: \n"
+            for i in range(len(self.candidates)):
+                text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
+            self.BVIObject.updateResults()
+            URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
+            text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+        elif not switch:
+            text = "You have already voted in this election"
+        else:
+            text = "There was a server error. Please try again later."
 
-        #Show current leader and link to better voting for more
-        self.BVIObject.updateResults()
-        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
-        text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+
+        
         
         #Send confirmation
         await interaction.edit_original_response(content=text, view=None)
