@@ -7,6 +7,9 @@ import asyncio
 import os
 import schedule
 from dotenv import load_dotenv
+import multiprocessing
+import subprocess
+import time
 
 import sqlite3
 
@@ -55,6 +58,7 @@ if __name__ == "__main__":
         Translator.createToken("DisBot")
         try:
             Translator.assignElection(electionid)
+            Translator.cookieLead = "vd-"
         except:
             interaction.response.send_message("Oops! That is not a valid election ID")
         elections[electionid] = Translator
@@ -66,10 +70,16 @@ if __name__ == "__main__":
 
     @bot.event
     async def on_message(message: discord.Message):
+        #this functionality isnt ready yet
+        #return
         #Is message from self or is the message not a poll? If so ignore it
         #Bot never does the standard check if the message is from itself as it should not send discord native polls
         if message.poll == None:
             return
+        
+        #If the message is a poll respond with the turnToBV view which alows the user to turn it into a STAR poll
+        view = PollViews.turnToBV(bot, message)
+        await message.reply(view=view)
     
 
     @bot.event
@@ -78,6 +88,7 @@ if __name__ == "__main__":
         print("Logged into discord. Appearing offline until ready.")
         print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
+        #Make previous InitBallot views functional
         if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
             database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
             db = database.cursor()
@@ -87,13 +98,14 @@ if __name__ == "__main__":
             msg: discord.Message = None
             Translator: BVI.BVWebTranslator = None
             for i in range(len(rows)):
-                msg = await bot.get_channel(rows[i][1]).fetch_message(rows[i][0])
-                view = await pollLink(None, rows[i][2])
+                msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
+                view = await pollLink(None, rows[i][3])
                 await msg.edit(view=view)
             print("Persistent views synced. Prior InitBallots are usable")   
         else:
             print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
         
+        #set up slash commands
         print("Syncing slash commands")
         try:
             await bot.tree.sync()
@@ -104,9 +116,17 @@ if __name__ == "__main__":
         
         await bot.change_presence(status=discord.Status.online)
         print("Bot is fully ready. Appearing online")
-        
-
-    bot.run(TOKEN)
     
-
-
+    
+            
+    #run bot and database failsafe
+    def databaseFailsafe():
+        #run databaseFailsafe twice a day
+        while True:
+            subprocess.run(["./databaseFailsafe"])
+            time.sleep(43200)
+    #run bot and database failsafe
+    #botRun = multiprocessing.Process(runBot)
+    failsafe = multiprocessing.Process(target=databaseFailsafe)
+    failsafe.start()
+    bot.run(TOKEN)
