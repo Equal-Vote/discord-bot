@@ -120,7 +120,13 @@ if __name__ == "__main__":
     
             
     #run bot and database failsafe
-    #failsafe = multiprocessing.Process(target=databaseFailsafe)
-    #failsafe.start()
-
+    def databaseFailsafe():
+        #run databaseFailsafe twice a day
+        while True:
+            subprocess.run(["./databaseFailsafe"])
+            time.sleep(43200)
+    #run bot and database failsafe
+    #botRun = multiprocessing.Process(runBot)
+    failsafe = multiprocessing.Process(target=databaseFailsafe)
+    failsafe.start()
     bot.run(TOKEN)
