@@ -2,7 +2,7 @@
 import json
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+import datetime
 import time
 
 
@@ -14,14 +14,16 @@ import sqlite3
 
 from STARCustomLibs import PunkinLogging, BVWebInteract as BVI
 
+import sys; sys.stdout = sys.stderr
+
 #TODO have these each created once when a new election is made, not every time a ballot is made
 
 load_dotenv()
-logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.now()}.txt")
+logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.datetime.now()}.txt")
 database = sqlite3.connect(os.getenv('BOT_DATABASE_PATH'))
 database = database.cursor()
 #Time is never null, even when election expires, as a failsafe
-database.execute("CREATE TABLE IF NOT EXISTS InitBallots (messageID INTEGER NOT NULL, channelID INTEGER NOT NULL, electionID TEXT NOT NULL, time INTEGER NOT NULL)")
+database.execute("CREATE TABLE IF NOT EXISTS InitBallots (id INTEGER PRIMARY KEY, messageID INTEGER NOT NULL, channelID INTEGER NOT NULL, electionID TEXT NOT NULL, time INTEGER NOT NULL)")
 
 #get data set up in a dictionary to prep for pollViews
 #takes a BVWebTranslator object and returns the relevant data from its JSON
@@ -43,7 +45,7 @@ def prepView(BVIObject) -> dict:
 async def deferInt(interaction: discord.Interaction):
     logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
     await interaction.response.defer(ephemeral=True)
-    logger.log(f"Responded to interaction, it is now {datetime.now()}", False, False)
+    logger.log(f"Responded to interaction, it is now {datetime.datetime.now()}", False, False)
 
 
 #View for message that will initiate ballot casting. This shows title, desc, options, and the cast vote button. This is not the ballot itself
@@ -81,8 +83,11 @@ class InitBallot(discord.ui.View):
     async def button_callback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
-        view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
-        await interaction.followup.send(view.description, view= view, ephemeral=True)
+        if not self.BVIObject.alreadyVoted(interaction.user.id):
+            await interaction.followup.send("You have already voted in this election", ephemeral=True)
+        else:
+            view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
+            await interaction.followup.send(view.description, view= view, ephemeral=True)
     
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
@@ -140,7 +145,6 @@ class Ballot(discord.ui.View):
             #save score
             self.save.scores[self.candNum] = self.values[0]
         #keeps option selects persistent in when navigating pages, otherwise it always goes back to X.
-        #TODO this function causes pages to turn from blank to X when swiping left to right. Does not affect dropdowns already voted on
         def refreshDefault(self):
             #this if statement ensures it just stays blank if it has not been interacted with yet
             if self.used:
@@ -280,18 +284,26 @@ class Ballot(discord.ui.View):
         scores = []
         for i in self.save.scores:
             scores.append(translateEmoji(i))
-        text = "You voted: \n"
-        for i in range(len(self.candidates)):
-            text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
+        
 
         #TODO implement responses for user already voted and failed to send vote
-        #Submit ballot
+        #Submit ballot, or handle errors
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
+        if not switch:
+            #Show current leader, a ballot copy, and link to better voting for more
+            text = "You voted: \n"
+            for i in range(len(self.candidates)):
+                text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
+            self.BVIObject.updateResults()
+            URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
+            text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+        elif switch:
+            text = "You have already voted in this election"
+        else:
+            text = "There was a server error. Please try again later."
 
-        #Show current leader and link to better voting for more
-        self.BVIObject.updateResults()
-        URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
-        text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+
+        
         
         #Send confirmation
         await interaction.edit_original_response(content=text, view=None)
@@ -309,17 +321,40 @@ class Ballot(discord.ui.View):
 
 #Sent after discord native poll is sent. Clicking the button deletes the poll and makes a STAR poll with that data
 class turnToBV(discord.ui.View):
-    def __init__(self, message: discord.Message):
+    def __init__(self, bot: commands.bot, message: discord.Message):
+        super().__init__(timeout=300)
+        self.bot = bot
         self.message:discord.Message = message
         self.btn = Button(label="Click Here to Turn Into a STAR Poll", style=discord.ButtonStyle.primary)
         self.btn.callback = self.callback
         self.add_item(self.btn)
 
-        #delete self after 5 minutes to avoid clutter
-        sleep(300)
 
+    #when button is pressed get poll data and turn into a star poll
     async def callback(self, interaction: discord.Interaction):
         await deferInt(interaction)
+        poll = self.message.poll
+
+        question: str = poll.question
+        duration = poll.expires_at
+
+        answers = poll.answers
+
+        for i in range(len(answers)):
+            answers[i] = getattr(answers[i].media, "text", None)
+
+        print(f"{question}\n{answers}\n{duration}")
+
+        Translator = BVI.BVWebTranslator()
+        Translator.createElection(question, duration, self.message.author.id, answers)
+
+        print(Translator.electJSON)
+        await interaction.edit_original_response(view=InitBallot(self.bot, Translator.electJSON, Translator))
+        await self.message.delete()
+
+        
+
+
         
 
         
