@@ -83,7 +83,7 @@ class InitBallot(discord.ui.View):
     async def button_callback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
-        if self.BVIObject.alreadyVoted(interaction.user.id):
+        if not self.BVIObject.alreadyVoted(interaction.user.id):
             await interaction.followup.send("You have already voted in this election", ephemeral=True)
         else:
             view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
@@ -289,7 +289,7 @@ class Ballot(discord.ui.View):
         #TODO implement responses for user already voted and failed to send vote
         #Submit ballot, or handle errors
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
-        if switch:
+        if not switch:
             #Show current leader, a ballot copy, and link to better voting for more
             text = "You voted: \n"
             for i in range(len(self.candidates)):
@@ -297,7 +297,7 @@ class Ballot(discord.ui.View):
             self.BVIObject.updateResults()
             URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
             text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
-        elif not switch:
+        elif switch:
             text = "You have already voted in this election"
         else:
             text = "There was a server error. Please try again later."
@@ -350,6 +350,7 @@ class turnToBV(discord.ui.View):
 
         print(Translator.electJSON)
         await interaction.edit_original_response(view=InitBallot(self.bot, Translator.electJSON, Translator))
+        await self.message.delete()
 
         
 
