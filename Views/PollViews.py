@@ -29,6 +29,8 @@ database.execute("CREATE TABLE IF NOT EXISTS InitBallots (id INTEGER PRIMARY KEY
 #takes a BVWebTranslator object and returns the relevant data from its JSON
 def prepView(BVIObject) -> dict:
     data = BVIObject.electJSON
+    print("this is data")
+    print(data)
     retData = {}
     retData["title"] = data['election']['title']
     retData["description"] = data['election']['description']
@@ -57,6 +59,7 @@ class InitBallot(discord.ui.View):
 
         #sort relevant dict entries into easy to access variables
         self.title = data['election']['title']
+        print(f"The title is {self.title}")
         self.description = data['election']["description"]
         self.candidates = data['election']['races'][0]['candidates']
 
@@ -83,11 +86,14 @@ class InitBallot(discord.ui.View):
     async def button_callback(self, interaction:discord.Interaction):
         #respond immeditately, interactions fail if not responded to in 3 seconds
         await deferInt(interaction)
-        if not self.BVIObject.alreadyVoted(interaction.user.id):
+        alrVot = self.BVIObject.alreadyVoted(interaction.user.id)
+        if alrVot:
             await interaction.followup.send("You have already voted in this election", ephemeral=True)
-        else:
+        elif not alrVot:
             view = Ballot(self.bot, self.title, self.candidates, self.BVIObject)
             await interaction.followup.send(view.description, view= view, ephemeral=True)
+        else:
+            await interaction.followup.send("There was a server error. Please try again later.", ephemeral=True)
     
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
@@ -289,7 +295,7 @@ class Ballot(discord.ui.View):
         #TODO implement responses for user already voted and failed to send vote
         #Submit ballot, or handle errors
         switch = self.BVIObject.submitBallot(interaction.user.id, scores)
-        if not switch:
+        if switch:
             #Show current leader, a ballot copy, and link to better voting for more
             text = "You voted: \n"
             for i in range(len(self.candidates)):
@@ -297,7 +303,7 @@ class Ballot(discord.ui.View):
             self.BVIObject.updateResults()
             URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
             text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
-        elif switch:
+        elif not switch:
             text = "You have already voted in this election"
         else:
             text = "There was a server error. Please try again later."
@@ -336,6 +342,7 @@ class turnToBV(discord.ui.View):
         poll = self.message.poll
 
         question: str = poll.question
+        print(f"The question is {question}")
         duration = poll.expires_at
 
         answers = poll.answers
@@ -349,7 +356,8 @@ class turnToBV(discord.ui.View):
         Translator.createElection(question, duration, self.message.author.id, answers)
 
         print(Translator.electJSON)
-        await interaction.edit_original_response(view=InitBallot(self.bot, Translator.electJSON, Translator))
+        view=InitBallot(self.bot, Translator.electJSON, Translator)
+        await interaction.edit_original_response(embed=view.titleTXT, view=view)
         await self.message.delete()
 
         

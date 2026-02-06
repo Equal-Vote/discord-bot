@@ -129,6 +129,8 @@ class BVWebTranslator:
         print(vars(resp))
 
         resp = resp.json()
+        print("post JSONing")
+        print(resp)
         #TODO account for fail sends
 
         self.electionID = resp['election']['election_id']
@@ -147,6 +149,7 @@ class BVWebTranslator:
     def alreadyVoted(self, user_id: str) -> bool:
         print("alr vot func", flush= True)
         hashedID = self.hashUser(user_id)
+        print(hashedID)
         print(f"{self.API}/Election/{self.electionID}/ballots")
         resp = requests.get(f"{self.API}/Election/{self.electionID}", cookies={'user_id': hashedID})
         print(resp)
@@ -154,9 +157,9 @@ class BVWebTranslator:
 
         #if so return True, if not False, None on error
         if resp.status_code == 200:
-            return True
-        elif resp.status_code == 400:
             return False
+        elif resp.status_code == 400:
+            return True
         return None
     #get ballot, usually used to show user their ballot if they double vote attempt
     def getBallot(self, userID):
@@ -167,6 +170,7 @@ class BVWebTranslator:
     def submitBallot(self, userID: str, scores: list) -> bool:
         #if the user already voted, return False. The vote should not be counted
         alrVote = self.alreadyVoted(userID)
+        print(f"alrvote func said {alrVote}")
         if alrVote:
             return False
         elif alrVote == None:
