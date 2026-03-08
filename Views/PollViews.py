@@ -29,8 +29,6 @@ database.execute("CREATE TABLE IF NOT EXISTS InitBallots (id INTEGER PRIMARY KEY
 #takes a BVWebTranslator object and returns the relevant data from its JSON
 def prepView(BVIObject) -> dict:
     data = BVIObject.electJSON
-    print("this is data")
-    print(data)
     retData = {}
     retData["title"] = data['election']['title']
     retData["description"] = data['election']['description']
@@ -336,9 +334,16 @@ class turnToBV(discord.ui.View):
         self.add_item(self.btn)
 
 
-    #when button is pressed get poll data and turn into a star poll
+    #when button is pressed stop timeout, get poll data,  and turn into a star poll
     async def callback(self, interaction: discord.Interaction):
         await deferInt(interaction)
+
+        #if button user isnt the user who made the poll, refuse to make it
+        if not interaction.user.id == self.message.author.id:
+            interaction.followup.send("Only the creator of this poll can turn it into a STAR poll", ephemeral=True)
+            return
+
+        self.timeout = None
         poll = self.message.poll
 
         question: str = poll.question
@@ -360,6 +365,14 @@ class turnToBV(discord.ui.View):
         await interaction.edit_original_response(embed=view.titleTXT, view=view)
         await self.message.delete()
 
+    #delete self after 5 minutes of non use
+    async def on_timeout(self):
+        msg : discord.Message = await self.bot.get_channel(self.channelID).fetch_message(self.messageID)
+        await msg.delete()
+    #get own message data for deletion purposes
+    def ownData(self, channelID, messageID):
+        self.messageID = messageID
+        self.channelID = channelID
         
 
 

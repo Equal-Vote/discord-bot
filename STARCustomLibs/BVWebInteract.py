@@ -77,7 +77,6 @@ class BVWebTranslator:
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
 
     #Creating an election
-    #unfinished DO NOT USE
     def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
         #URL for creating election
         url = f"{self.API}/Elections"
@@ -86,10 +85,10 @@ class BVWebTranslator:
         #TODO safeguard against duplicate candidate ids
         #prepare candidate list for API
         cands: list = []
-        for i in candidates:
+        for candName in candidates:
             cands.append({
                             "candidate_id": f"c-{self.randomChars(3)}",
-                            "candidate_name": i,
+                            "candidate_name": candName,
                         })
 
         #prepare payload
@@ -116,7 +115,7 @@ class BVWebTranslator:
                         "email": False,
                         "ip_address": False,
                         "phone": False,
-                        "voter_id": False
+                        "voter_id": True
                     },
                     "public_results": True,
                 },
@@ -134,10 +133,8 @@ class BVWebTranslator:
         #TODO account for fail sends
 
         self.electionID = resp['election']['election_id']
-        print(f"elect id {self.electionID}")
         #assign self the election just created
         self.assignElection(self.electionID)
-        #print(self.electJSON)
         
 
 
@@ -147,13 +144,8 @@ class BVWebTranslator:
     #did this user already vote
     #note this isnt inter platform. There is an exploit where a user could vote on the website then again on another platform
     def alreadyVoted(self, user_id: str) -> bool:
-        print("alr vot func", flush= True)
         hashedID = self.hashUser(user_id)
-        print(hashedID)
-        print(f"{self.API}/Election/{self.electionID}/ballots")
         resp = requests.get(f"{self.API}/Election/{self.electionID}", cookies={'user_id': hashedID})
-        print(resp)
-        print(vars(resp))
 
         #if so return True, if not False, None on error
         if resp.status_code == 200:

@@ -70,8 +70,6 @@ if __name__ == "__main__":
 
     @bot.event
     async def on_message(message: discord.Message):
-        #this functionality isnt ready yet
-        #return
         #Is message from self or is the message not a poll? If so ignore it
         #Bot never does the standard check if the message is from itself as it should not send discord native polls
         if message.poll == None:
@@ -79,7 +77,9 @@ if __name__ == "__main__":
         
         #If the message is a poll respond with the turnToBV view which alows the user to turn it into a STAR poll
         view = PollViews.turnToBV(bot, message)
-        await message.reply(view=view)
+        sentMessage : discord.Message = await message.reply(view=view)
+        #this function is necessary so the message can delete itself after 5 minutes
+        view.ownData(sentMessage.channel.id, sentMessage.id)
     
 
     @bot.event
