@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import multiprocessing
 import subprocess
 import time
+import crontab
 
 import sqlite3
 
@@ -88,6 +89,8 @@ if __name__ == "__main__":
         print("Logged into discord. Appearing offline until ready.")
         print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
+        #run database failsafe before making views
+        databaseFailsafe()
         #Make previous InitBallot views functional
         if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
             database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
@@ -121,12 +124,11 @@ if __name__ == "__main__":
             
     #run bot and database failsafe
     def databaseFailsafe():
-        #run databaseFailsafe twice a day
-        while True:
-            subprocess.run(["./databaseFailsafe"])
-            time.sleep(43200)
+        subprocess.run(["./databaseFailsafe"])
     #run bot and database failsafe
-    #botRun = multiprocessing.Process(runBot)
+    #run databaseFailsafe twice a day
+    schedule.every(12).hours.do(databaseFailsafe)
+
     failsafe = multiprocessing.Process(target=databaseFailsafe)
     failsafe.start()
     bot.run(TOKEN)
