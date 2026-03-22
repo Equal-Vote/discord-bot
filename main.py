@@ -81,6 +81,7 @@ if __name__ == "__main__":
         sentMessage : discord.Message = await message.reply(view=view)
         #this function is necessary so the message can delete itself after 5 minutes
         view.ownData(sentMessage.channel.id, sentMessage.id)
+        
     
 
     @bot.event
@@ -101,6 +102,8 @@ if __name__ == "__main__":
             msg: discord.Message = None
             Translator: BVI.BVWebTranslator = None
             for i in range(len(rows)):
+                print(rows[i][2])
+                print(rows[i][1])
                 msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
                 view = await pollLink(None, rows[i][3])
                 await msg.edit(view=view)
@@ -129,6 +132,4 @@ if __name__ == "__main__":
     #run databaseFailsafe twice a day
     schedule.every(12).hours.do(databaseFailsafe)
 
-    failsafe = multiprocessing.Process(target=databaseFailsafe)
-    failsafe.start()
     bot.run(TOKEN)
