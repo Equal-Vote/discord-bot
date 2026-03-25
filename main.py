@@ -87,6 +87,9 @@ if __name__ == "__main__":
     @bot.event
     async def on_ready():
         await bot.change_presence(status= discord.Status.invisible)
+        #exists as a workaround since git doesnt take empty dirs
+        if not os.path.exists("/graphTemp"):
+            os.makedirs("graphTemp")
         print("Logged into discord. Appearing offline until ready.")
         print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting

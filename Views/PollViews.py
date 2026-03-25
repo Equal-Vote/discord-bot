@@ -386,10 +386,4 @@ class turnToBV(discord.ui.View):
     #get own message data for deletion purposes
     def ownData(self, channelID, messageID):
         self.messageID = messageID
-        self.channelID = channelID
-        
-
-
-        
-
-        
+        self.channelID = channelID    
