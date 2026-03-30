@@ -233,7 +233,7 @@ class BVWebTranslator:
             votes.append(candidate[1])
 
         finalists = [self.winner, self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['name'], "Equal Support"]
-        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['winner_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['runner_up_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']]
+        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['winner_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['runner_up_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['equal_votes']]
         finalists.reverse()
         finalistVotes.reverse()
 
