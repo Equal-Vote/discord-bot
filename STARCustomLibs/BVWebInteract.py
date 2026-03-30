@@ -9,6 +9,9 @@ import hashlib
 import datetime
 import random
 import string
+from multiprocessing import Process
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 #generate a truly random 32 byte key for secure tokens
 def randomKey():
@@ -28,8 +31,6 @@ class BVWebTranslator:
         self.API = "https://bettervoting.com/API"
         #all user Ids start with this so it is easy to identify what source ballots come from
         self.cookieLead = ""
-        
-        pass
         
     #Functions related to generating keys
     
@@ -61,6 +62,7 @@ class BVWebTranslator:
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
+        print("elect JSON")
         print(self.electJSON)
     #Get election JSON file
     def getElection(self) -> dict:
@@ -75,6 +77,7 @@ class BVWebTranslator:
         print(f"vars resp{vars(resp)}")
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
+        self.prepCands()
 
     #Creating an election
     def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
@@ -124,12 +127,7 @@ class BVWebTranslator:
 
         #send payload
         resp = requests.post(url=url, json= payload)
-        print(resp)
-        print(vars(resp))
-
         resp = resp.json()
-        print("post JSONing")
-        print(resp)
         #TODO account for fail sends
 
         self.electionID = resp['election']['election_id']
@@ -192,11 +190,6 @@ class BVWebTranslator:
         #Post election with a hashed userID, preceded by vd to indicated a discord voter
         cookie = self.hashUser(userID)
         resp = requests.post((self.URL + '/vote'), json = payload, cookies={'temp_id': cookie})
-        print("THIS IS A BALLOT!!!!!!!")
-        print(resp)
-        print(vars(resp))
-        print('payload')
-        print(payload)
         return self.successSend(resp, True)
 
     
@@ -213,8 +206,55 @@ class BVWebTranslator:
         if noneOnFail:
             return None
         return False
-            
 
+    #Functions related to graphing
+    #Create bar graph from data, returns a string which is the graphs png files
+    def createBar(self) -> str:
+        #makes the actual bar graph
+        def actualBar(names: list, values: list, secondRound: bool, id: str):
+            plt.barh(names, values)
+            #is this the first or second round
+            if secondRound:
+                roundNum = "1"
+                plt.title("Runoff Round")
+            else:
+                roundNum = "2"
+                plt.title("Scoring Round")
+            plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+            plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
+            plt.savefig(f"graphTemp/{roundNum}{id}.png", dpi=50, bbox_inches="tight")
+
+        #update results, the prepare data for graphs
+        self.updateResults()
+        categories = []
+        votes = []
+        for candidate in self.prepCands():
+            categories.append(candidate[0])
+            votes.append(candidate[1])
+
+        finalists = [self.winner, self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['name'], "Equal Support"]
+        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['winner_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['runner_up_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['equal_votes']]
+        finalists.reverse()
+        finalistVotes.reverse()
+
+        #makes ID that will later be used by program to get pngs
+        #this system using processes seems backwards, but it makes sure that matplot keeps data on its own graph
+        pngID = self.randomChars(10)
+        p1 = Process(target=actualBar, args=(categories, votes, False, pngID))
+        p2 = Process(target=actualBar, args=(finalists, finalistVotes, True, pngID))
+
+        p1.start()
+        p1.join()
+        p2.start()
+        p2.join()
+        #return the pngID. Lead with 1 to get the score round, lead with 2 to get the runoff
+        return pngID
         
-
-
+        
+    #Get a simple list of candidate names and scores. Sorting is unnecessary, they arrive in order
+    def prepCands(self) -> list:
+        candidates = []
+        for candidate in self.resultsJSON['results'][0]['summaryData']['candidates']:
+            candidates.append([candidate['name'], candidate['score']])
+        candidates.reverse()
+        return candidates

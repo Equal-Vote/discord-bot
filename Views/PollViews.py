@@ -7,6 +7,7 @@ import time
 
 
 import discord
+from discord import File
 from discord.ui import Button, View
 from discord.ext import commands
 
@@ -96,8 +97,13 @@ class InitBallot(discord.ui.View):
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
         await deferInt(interaction)
-        self.BVIObject.updateResults()
-        await interaction.followup.send(f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details", ephemeral=True)
+        imgID = self.BVIObject.createBar()
+        score = f"graphTemp/2{imgID}.png"
+        runoff = f"graphTemp/1{imgID}.png"
+        files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
+        await interaction.followup.send(files = files, content=f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details", ephemeral=True)
+        os.remove(score)
+        os.remove(runoff)
 
     #Save data to database
     def saveToSQL(self, messageId: str, channelId: str) -> None:
@@ -306,11 +312,17 @@ class Ballot(discord.ui.View):
         else:
             text = "There was a server error. Please try again later."
 
-
+        #prepare graphs
+        imgID = self.BVIObject.createBar()
+        score = f"graphTemp/2{imgID}.png"
+        runoff = f"graphTemp/1{imgID}.png"
+        files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
         
         
-        #Send confirmation
-        await interaction.edit_original_response(content=text, view=None)
+        #Send confirmation and delete pngs from local machine
+        await interaction.edit_original_response(content=text, attachments=files, view=None)
+        os.remove(score)
+        os.remove(runoff)
     async def pageCounterCallback(self, interaction: discord.Interaction):
         await deferInt(interaction)
 
@@ -343,11 +355,11 @@ class turnToBV(discord.ui.View):
             interaction.followup.send("Only the creator of this poll can turn it into a STAR poll", ephemeral=True)
             return
 
+        #stops this message from timing out, otherwise the InitBallot view will also timeout
         self.timeout = None
         poll = self.message.poll
 
         question: str = poll.question
-        print(f"The question is {question}")
         duration = poll.expires_at
 
         answers = poll.answers
@@ -360,10 +372,12 @@ class turnToBV(discord.ui.View):
         Translator = BVI.BVWebTranslator()
         Translator.createElection(question, duration, self.message.author.id, answers)
 
-        print(Translator.electJSON)
+        #make Init ballot, save it to database, and delete the change to STAR button
         view=InitBallot(self.bot, Translator.electJSON, Translator)
-        await interaction.edit_original_response(embed=view.titleTXT, view=view)
+        msg: discord.Message = await interaction.followup.send(embed=view.titleTXT, view=view)
+        view.saveToSQL(msg.id, msg.channel.id)
         await self.message.delete()
+        await self.on_timeout()
 
     #delete self after 5 minutes of non use
     async def on_timeout(self):
@@ -372,10 +386,4 @@ class turnToBV(discord.ui.View):
     #get own message data for deletion purposes
     def ownData(self, channelID, messageID):
         self.messageID = messageID
-        self.channelID = channelID
-        
-
-
-        
-
-        
+        self.channelID = channelID    
