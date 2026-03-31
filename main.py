@@ -105,11 +105,14 @@ if __name__ == "__main__":
             msg: discord.Message = None
             Translator: BVI.BVWebTranslator = None
             for i in range(len(rows)):
-                print(rows[i][2])
-                print(rows[i][1])
-                msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
-                view = await pollLink(None, rows[i][3])
-                await msg.edit(view=view)
+                try:
+                    print(rows[i][2])
+                    print(rows[i][1])
+                    msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
+                    view = await pollLink(None, rows[i][3])
+                    await msg.edit(view=view)
+                except:
+                    print("message not found, likely deleted by users")
             print("Persistent views synced. Prior InitBallots are usable")   
         else:
             print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
