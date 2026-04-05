@@ -21,6 +21,7 @@ import sys; sys.stdout = sys.stderr
 
 load_dotenv()
 logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.datetime.now()}.txt")
+secondLogger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/falseVotes.txt")
 database = sqlite3.connect(os.getenv('BOT_DATABASE_PATH'))
 database = database.cursor()
 #Time is never null, even when election expires, as a failsafe
@@ -97,7 +98,12 @@ class InitBallot(discord.ui.View):
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
         await deferInt(interaction)
-        imgID = self.BVIObject.createBar()
+        try:
+            imgID = self.BVIObject.createBar()
+        except(e):
+            secondLogger.log(f"This was a false ballot by {interaction.user}")
+            secondLogger.log(e)
+            secondLogger.log(self.BVIObject.resultsJSON)
         score = f"graphTemp/2{imgID}.png"
         runoff = f"graphTemp/1{imgID}.png"
         files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
@@ -313,7 +319,13 @@ class Ballot(discord.ui.View):
             text = "There was a server error. Please try again later."
 
         #prepare graphs
-        imgID = self.BVIObject.createBar()
+        try:
+            imgID = self.BVIObject.createBar()
+        except(e):
+            secondLogger.log(f"This was a false ballot by {interaction.user}")
+            secondLogger.log(e)
+            secondLogger.log(self.BVIObject.resultsJSON)
+        score = f"graphTemp/2{imgID}.png"
         score = f"graphTemp/2{imgID}.png"
         runoff = f"graphTemp/1{imgID}.png"
         files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
