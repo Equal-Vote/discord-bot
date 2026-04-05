@@ -100,10 +100,10 @@ class InitBallot(discord.ui.View):
         await deferInt(interaction)
         try:
             imgID = self.BVIObject.createBar()
-        except(e):
-            secondLogger.log(f"This was a false ballot by {interaction.user}")
-            secondLogger.log(e)
-            secondLogger.log(self.BVIObject.resultsJSON)
+        except Exception as e:
+            secondLogger.log(f"This was a false ballot by {interaction.user}", True, False)
+            secondLogger.log(e, True, False)
+            secondLogger.log(self.BVIObject.resultsJSON, True, False)
         score = f"graphTemp/2{imgID}.png"
         runoff = f"graphTemp/1{imgID}.png"
         files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
@@ -321,10 +321,10 @@ class Ballot(discord.ui.View):
         #prepare graphs
         try:
             imgID = self.BVIObject.createBar()
-        except(e):
-            secondLogger.log(f"This was a false ballot by {interaction.user}")
-            secondLogger.log(e)
-            secondLogger.log(self.BVIObject.resultsJSON)
+        except Exception as e:
+            secondLogger.log(f"This was a false ballot by {interaction.user}", True, False)
+            secondLogger.log(e, True, False)
+            secondLogger.log(self.BVIObject.resultsJSON, True, False)
         score = f"graphTemp/2{imgID}.png"
         score = f"graphTemp/2{imgID}.png"
         runoff = f"graphTemp/1{imgID}.png"
