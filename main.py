@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import multiprocessing
 import subprocess
 import time
+import crontab
 
 import sqlite3
 
@@ -80,14 +81,20 @@ if __name__ == "__main__":
         sentMessage : discord.Message = await message.reply(view=view)
         #this function is necessary so the message can delete itself after 5 minutes
         view.ownData(sentMessage.channel.id, sentMessage.id)
+        
     
 
     @bot.event
     async def on_ready():
         await bot.change_presence(status= discord.Status.invisible)
+        #exists as a workaround since git doesnt take empty dirs
+        if not os.path.exists("graphTemp"):
+            os.makedirs("graphTemp")
         print("Logged into discord. Appearing offline until ready.")
         print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
+        #run database failsafe before making views
+        databaseFailsafe()
         #Make previous InitBallot views functional
         if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
             database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
@@ -98,9 +105,14 @@ if __name__ == "__main__":
             msg: discord.Message = None
             Translator: BVI.BVWebTranslator = None
             for i in range(len(rows)):
-                msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
-                view = await pollLink(None, rows[i][3])
-                await msg.edit(view=view)
+                try:
+                    print(rows[i][2])
+                    print(rows[i][1])
+                    msg = await bot.get_channel(rows[i][2]).fetch_message(rows[i][1])
+                    view = await pollLink(None, rows[i][3])
+                    await msg.edit(view=view)
+                except:
+                    print("message not found, likely deleted by users")
             print("Persistent views synced. Prior InitBallots are usable")   
         else:
             print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
@@ -121,12 +133,9 @@ if __name__ == "__main__":
             
     #run bot and database failsafe
     def databaseFailsafe():
-        #run databaseFailsafe twice a day
-        while True:
-            subprocess.run(["./databaseFailsafe"])
-            time.sleep(43200)
+        subprocess.run(["./databaseFailsafe"])
     #run bot and database failsafe
-    #botRun = multiprocessing.Process(runBot)
-    failsafe = multiprocessing.Process(target=databaseFailsafe)
-    failsafe.start()
+    #run databaseFailsafe twice a day
+    schedule.every(12).hours.do(databaseFailsafe)
+
     bot.run(TOKEN)

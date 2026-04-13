@@ -1,12 +1,16 @@
 //InitBallot views should only last for 1 month maximum. Anything in the database for longer than that is a glitch. This is a failsafe that deletes them.
+//This also deletes files in graphTemp folder that have existed for longer than 5 minutes
 
 use rusqlite::{params, Connection, Result};
 use dotenv::dotenv;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, Duration, UNIX_EPOCH};
+use std::fs;
 
 use std::env;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    //the first half of this code cleans the database
     //get database
     dotenv().ok();
     let databasePath = env::var("BOT_DATABASE_PATH").unwrap();
@@ -38,5 +42,24 @@ fn main() -> Result<()> {
         }
     }
     println!("All glitched views removed from database, if any");
-    Ok(())
+
+
+
+
+    //The second half of this code cleans graphTemp. Files older than 5 minutes are deleted
+    let path = "./graphTemp";
+    let curr_time: std::time::SystemTime = SystemTime::now();
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        let metadata = fs::metadata(&path)?;
+        let mod_time = metadata.modified()?;
+        let elapsed = curr_time.duration_since(mod_time)?;
+
+        if elapsed.as_secs() > 300{
+            fs::remove_file(path);
+        }
+    }
+
+    Ok(()) 
 }
