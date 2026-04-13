@@ -46,7 +46,10 @@ def prepView(BVIObject) -> dict:
 #defer an interaction
 async def deferInt(interaction: discord.Interaction):
     logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
-    await interaction.response.defer(ephemeral=True)
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except Exception as e:
+        print(f"defer failed: {e}")
     logger.log(f"Responded to interaction, it is now {datetime.datetime.now()}", False, False)
 
 
@@ -108,8 +111,6 @@ class InitBallot(discord.ui.View):
         runoff = f"graphTemp/1{imgID}.png"
         files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
         await interaction.followup.send(files = files, content=f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details", ephemeral=True)
-        os.remove(score)
-        os.remove(runoff)
 
     #Save data to database
     def saveToSQL(self, messageId: str, channelId: str) -> None:
@@ -323,7 +324,7 @@ class Ballot(discord.ui.View):
             imgID = self.BVIObject.createBar()
         except Exception as e:
             secondLogger.log(f"This was a false ballot by {interaction.user}", True, False)
-            secondLogger.log(e, True, False)
+            secondLogger.log(e, True, True)
             secondLogger.log(self.BVIObject.resultsJSON, True, False)
         score = f"graphTemp/2{imgID}.png"
         score = f"graphTemp/2{imgID}.png"
@@ -331,10 +332,8 @@ class Ballot(discord.ui.View):
         files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]
         
         
-        #Send confirmation and delete pngs from local machine
+        #Send confirmation
         await interaction.edit_original_response(content=text, attachments=files, view=None)
-        os.remove(score)
-        os.remove(runoff)
     async def pageCounterCallback(self, interaction: discord.Interaction):
         await deferInt(interaction)
 

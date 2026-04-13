@@ -223,6 +223,7 @@ class BVWebTranslator:
             plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
             plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
             plt.savefig(f"graphTemp/{roundNum}{id}.png", dpi=50, bbox_inches="tight")
+            plt.close()
 
         #update results, the prepare data for graphs
         self.updateResults()
