@@ -231,9 +231,16 @@ class BVWebTranslator:
         for candidate in self.prepCands():
             categories.append(candidate[0])
             votes.append(candidate[1])
-
+        
+        print("Results")
+        print(self.resultsJSON)
+        
+        #This gets the relevant data and sorts it for the graph
+        #Be careful when changing this, the API will change how some of this data is ordered. It is currently set up to use data whose order doesnt move
+        winID = self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['id']
+        runID = self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['id']
         finalists = [self.winner, self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['name'], "Equal Support"]
-        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['winner_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['runner_up_votes'], self.resultsJSON['results'][0]['roundResults'][0]['logs'][-1]['equal_votes']]
+        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['votesPreferredOver'][runID], self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['votesPreferredOver'][winID], self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']]
         finalists.reverse()
         finalistVotes.reverse()
 
