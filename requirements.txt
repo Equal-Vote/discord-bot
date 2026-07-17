@@ -3,3 +3,5 @@ requests
 python-dotenv
 pyjwt
 schedule
+crontab
+pywaffle
