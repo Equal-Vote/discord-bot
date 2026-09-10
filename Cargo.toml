@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rusqlite = "0.38.0"
+rusqlite = "0.40.2"
 dotenv = "0.15.0"
 
 [[bin]]
