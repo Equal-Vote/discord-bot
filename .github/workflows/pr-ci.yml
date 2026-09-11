@@ -1,0 +1,59 @@
+# Build check for pull requests.
+#
+# Without this, nothing verifies a pull request -- build-push-deploy.yml only
+# runs on push to the default branch, after the merge. This repo has two
+# toolchains and Dependabot now watches both, so each gets a job.
+#
+# Actions are pinned by commit SHA rather than tag, matching the convention
+# already used elsewhere in this org and required by the zizmor audit.
+# cargo and rustup are preinstalled on the GitHub-hosted ubuntu runners, so
+# no third-party toolchain action is needed.
+name: PR CI
+
+"on":
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # checkout leaves the job token in .git/config unless told
+          # otherwise. Nothing here pushes, so drop it (zizmor:
+          # artipacked).
+          persist-credentials: false
+
+      - name: Build
+        run: cargo build --locked --verbose
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # checkout leaves the job token in .git/config unless told
+          # otherwise. Nothing here pushes, so drop it (zizmor:
+          # artipacked).
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # Matches the base image in this repo's Dockerfile.
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # There is no test suite yet, so this only proves every module parses
+      # and the pinned requirements still resolve -- which is the part a
+      # Dependabot bump can break.
+      - name: Byte-compile sources
+        run: python -m compileall main.py STARCustomLibs Views
