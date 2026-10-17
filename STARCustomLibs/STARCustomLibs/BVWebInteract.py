@@ -13,11 +13,13 @@ from multiprocessing import Process
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
+from STARCustomLibs import PunkinLogging
+
 #generate a truly random 32 byte key for secure tokens
 def randomKey():
     return secrets.token_hex(32)
 
-
+logger = PunkinLogging.logWrapper()
 
 class BVWebTranslator:
     def __init__(self):
@@ -54,7 +56,7 @@ class BVWebTranslator:
     #Assign this object an election, should only be used once per object
     def assignElection(self, electionID: str) -> None:
         if not self.electJSON == None:
-            print("ERROR: assignElection called but election already assigned to this object")
+            logger.log(log = "ERROR: assignElection called but election already assigned to this object", type="error", lead=self.electionID)
             return
         #creates URL with electionID created at bettervoting.com
         self.electionID = electionID
@@ -62,25 +64,26 @@ class BVWebTranslator:
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
-        print("elect JSON")
-        print(self.electJSON)
+        logger.log(log="Created election", type="debug", lead = self.electionID)
+        logger.log(log=self.electJSON, type="debug", lead=self.electionID)
     #Get election JSON file
     def getElection(self) -> dict:
         if self.electJSON == None:
-            print("ERROR: getElection called but no election assigned to this object")
+            logger.log(log="ERROR: getElection called but no election assigned to this object", type="debug", lead=self.electionID)
         else:
             return self.electJSON
     #update results
     def updateResults(self) -> None:
         url = f"{self.API}/ElectionResult/{self.electionID}"
         resp = requests.get(url)
-        print(f"vars resp{vars(resp)}")
+        logger.log(log=f"Updated Election Data\n\nvars resp{vars(resp)}", type="debug", lead=self.electionID)
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
         self.prepCands()
 
     #Creating an election
     def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
+        logger.log(log="Creating an election. ElectionID doesnt exist yet", type="debug", lead=question)
         #URL for creating election
         url = f"{self.API}/Elections"
         self.electionID = self.randomChars(6)
@@ -123,13 +126,14 @@ class BVWebTranslator:
 
         #send payload
         resp = requests.post(url=url, json= payload)
-        print(vars(resp))
+        content = vars(resp)
         resp = resp.json()
         #TODO account for fail sends
         
         self.electionID = resp['election']['election_id']
         #assign self the election just created
         self.assignElection(self.electionID)
+        logger.log(log=f"Election {question} created successfully\n\n{content}", type="debug", lead=self.electionID)
         
 
 
@@ -156,11 +160,13 @@ class BVWebTranslator:
     #returns False if user already voted, True on success, and None on an error
     def submitBallot(self, userID: str, scores: list) -> bool:
         #if the user already voted, return False. The vote should not be counted
+        logger.log(log=f"{userID} is submitting a ballot", type="debug", lead=self.electionID)
         alrVote = self.alreadyVoted(userID)
-        print(f"alrvote func said {alrVote}")
         if alrVote:
+            logger.log(log=f"{userID} already voted", type="debug", lead=self.electionID)
             return False
         elif alrVote == None:
+            logger.log(log=f"{userID} ran into an error in the alrVote function", type="error", lead=self.electionID)
             return None
         
         #if the user didnt already vote, prepare their ballot for submission to BV
@@ -230,8 +236,8 @@ class BVWebTranslator:
             categories.append(candidate[0])
             votes.append(candidate[1])
         
-        print("Results")
-        print(self.resultsJSON)
+        logger.log(log=f"Results \n\n{self.resultsJSON}", type="debug", lead=self.electionID)
+        
         #This gets the relevant data and sorts it for the graph
         #Be careful when changing this, the API will change how some of this data is ordered. It is currently set up to use data whose order doesnt move
         winID = self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['id']
@@ -256,6 +262,7 @@ class BVWebTranslator:
 
     #Create an ASCII bar graph instead to reduce load times
     def createASCIIBar(self) -> str:
+        logger.log(log="Creating ASCII Graph", type="debug", lead=self.electionID)
         #update results, the prepare data for graphs
         self.updateResults()
         categories = []
@@ -266,10 +273,8 @@ class BVWebTranslator:
         categories.reverse()
         votes.reverse()
 
-        print(f"\n\n{categories}\n\n")
+        logger.log(log=f"Graph Data\n\n{categories}\n\n", type="debug", lead=self.electionID)
         
-        print("Results")
-        print(self.resultsJSON)
         #This gets the relevant data and sorts it for the graph
         #Be careful when changing this, the API will change how some of this data is ordered. It is currently set up to use data whose order doesnt move
         winID = self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['id']
@@ -332,10 +337,10 @@ class BVWebTranslator:
         for i in runoffBars:
             finalText = f"{finalText}{i}\n"
         finalText = f"{finalText}\n\n{text3}"
-        print(finalText)
         return finalText
 
-    
+        
+        
     #Get a simple list of candidate names and scores. Sorting is unnecessary, they arrive in order
     def prepCands(self) -> list:
         candidates = []
