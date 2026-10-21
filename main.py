@@ -23,7 +23,8 @@ from Views import PollViews
 #TODO implement error handling
 #TODO deintegrate DiscordBotAssist
 if __name__ == "__main__":
-    print("Preparing Bot")
+    logger = PunkinLogging.logWrapper()
+    logger.log("Deploying Bot. Beginning startup")
     #create bot 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -32,8 +33,6 @@ if __name__ == "__main__":
     #tree = app_commands.CommandTree(bot)
 
     load_dotenv()
-    #For tracking times when the bot is attempted to be used outside of testing
-    illegalPolls = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/illegalPolls.txt")
     TOKEN = os.getenv('DISCORD_TOKEN')
     #jwt_secret_key = os.getenv('JWT_SECRET_KEY')
     #jwt_token = os.getenv('JWT_TOKEN')
@@ -46,21 +45,6 @@ if __name__ == "__main__":
     #Object that tracks rate limiting
     rateLimits = rateLimitCheck.rateCheck()
 
-    #This code should be removed from the public version, as it is unnecessary
-    #For more information, ctrl F "allowedServers"
-    #Is the allowed servers list empty? That means this bot is public and this check is unnecessary
-    #If not, make sure the bot is allowed here
-    allowedGuild = (os.getenv("APPROVED_SERVERS").split(","))
-    rejectText = "This bot is for testing only and shouldn't be in this server. Once a public release is available, a link to it will be available in this bot's bio"
-    def validGuild(guildId):
-        strGuildId = str(guildId)
-        if len(allowedGuild) == 0:
-            return False
-        if strGuildId in allowedGuild:
-            return False
-        illegalPolls.log(strGuildId, False, False)
-        return True
-    
     #Command to get an election from better voting and begin voting in discord
     #command syntax is /linkpoll [electionID]
     @bot.tree.command(
@@ -72,10 +56,7 @@ if __name__ == "__main__":
     )
     async def link_poll(interaction: discord.Interaction, electionid: str):
         #With election object created, create view and send message for ballot casting. Then save the data to the database to be pulled after redeploy
-        if validGuild(interaction.guild.id):
-            await rateLimits.wait()
-            await interaction.response.send_message(rejectText)
-            return
+
         index = await pollLink(interaction, electionid)
         await rateLimits.wait()
         msg = await interaction.response.send_message(embeds = initBallotViews.initBallots[index].titleTXT, view=initBallotViews.initBallots[index])
@@ -104,11 +85,6 @@ if __name__ == "__main__":
         if message.poll == None:
             return
         
-        if validGuild(message.guild.id):
-            await rateLimits.wait()
-            await message.reply(rejectText)
-            return
-        
         #If the message is a poll respond with the turnToBV view which alows the user to turn it into a STAR poll
         view = PollViews.turnToBV(bot, message, initBallotViews, rateLimits)
         await rateLimits.wait()
@@ -130,8 +106,8 @@ if __name__ == "__main__":
         #exists as a workaround since git doesnt take empty dirs
         if not os.path.exists("graphTemp"):
             os.makedirs("graphTemp")
-        print("Logged into discord. Appearing offline until ready.")
-        print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
+        logger.log("Logged into discord. Appearing offline until ready.")
+        logger.log("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
         #Make previous InitBallot views functional
         if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
@@ -153,43 +129,43 @@ if __name__ == "__main__":
                     await rateLimits.wait()
                     await msg.edit(view=initBallotViews.initBallots[index])
                 except Exception as e:
-                    print("message not found, likely deleted by users")
+                    logger.log(log="message not found, likely deleted by users", type="debug", lead = column3)
 
             tasks = []
             for i in range(len(rows)):
                 try:
-                    print(rows[i][2])
-                    print(rows[i][1])
+                    logger.log(log = f"{rows[i][2]}\n\n{rows[i][1]}", type="debug", lead = rows[i][3])
                     tasks.append(asyncio.create_task(replaceInitBallot(rows[i][1], rows[i][2], rows[i][3])))
                     #Complete tasks in batches of 40
                     if len(tasks) >= 40:
                         await asyncio.gather(*tasks, return_exceptions=True)
                         tasks = []
                 except:
-                    print("message not found, likely deleted by users")
+                    logger.log(log="message not found, likely deleted by users", type = "debug", lead = rows[i][3])
             await asyncio.gather(*tasks, return_exceptions=True)
-            print("Persistent views synced. Prior InitBallots are usable")   
+            logger.log("Persistent views synced. Prior InitBallots are usable")   
         else:
-            print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
+            logger.log(log="No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH", type="warning")
         
         #set up slash commands
-        print("Syncing slash commands")
+        logger.log("Syncing slash commands")
         try:
             #await rateLimits.wait()
             await bot.tree.sync()
-            print("Slash commands synced")
+            logger.log("Slash commands synced")
         except Exception as e:
-            print(f"Error syncing slash commands: {e}")
+            logger.log(f"Error syncing slash commands: {e}", type = "error")
             exit(1)
         
         await rateLimits.wait()
         await bot.change_presence(status=discord.Status.online)
-        print("Bot is fully ready. Appearing online")
+        logger.log("Bot is fully ready. Appearing online")
     
     
             
     #run bot and database failsafe
     def databaseFailsafe():
+        #TODO This throws an error. It cannot find the file. May be a directory issue
         subprocess.run(["./databaseFailsafe"])
     async def databaseFailsafeLoop():
         while True:
@@ -197,14 +173,14 @@ if __name__ == "__main__":
             await asyncio.sleep(43200)
     #run scheduled tasks
     async def rateLimitLoop():
-        print("loop started")
+        logger.log("Rate Limit Loop Started")
         while True:
             try:
                 #schedule.run_pending()
                 rateLimits.tickDown()
                 await asyncio.sleep(rateLimits.decrementAmount)
             except Exception as e:
-                print(e)
+                logger.log(log = e, type = "error")
         raise Exception
     #run bot
     bot.run(TOKEN)

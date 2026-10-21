@@ -20,8 +20,7 @@ import sys; sys.stdout = sys.stderr
 #TODO have these each created once when a new election is made, not every time a ballot is made
 
 load_dotenv()
-logger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/{datetime.datetime.now()}.txt")
-secondLogger = PunkinLogging.errorLogger(f"{os.getenv('PUNKIN_PATH')}/falseVotes.txt")
+logger = PunkinLogging.logWrapper()
 database = sqlite3.connect(os.getenv('BOT_DATABASE_PATH'))
 database = database.cursor()
 #Time is never null, even when election expires, as a failsafe
@@ -60,125 +59,133 @@ class InitBallotTracker():
 
 #defer an interaction
 async def deferInt(interaction: discord.Interaction, rateLimits):
-    logger.log(f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", False, False)
+    logger.log(log=f"Responding to interaction that expires at {interaction.expires_at} initiated by user {interaction.user}", type="debug", lead=interaction)
     try:
         await rateLimits.wait()
         await interaction.response.defer(ephemeral=True)
     except Exception as e:
-        print(f"defer failed: {e}")
-    logger.log(f"Responded to interaction, it is now {datetime.datetime.now()}", False, False)
+        logger.log(log=e, type="error", lead=interaction)
+    logger.log(log=f"Responded to interaction, it is now {datetime.datetime.now()}", type="debug", lead=interaction)
 
 
 #View for message that will initiate ballot casting. This shows title, desc, options, and the cast vote button. This is not the ballot itself
 class InitBallot(discord.ui.View):
     def __init__(self, bot: commands.bot, data: dict, BVIObject: BVI.BVWebTranslator, rateLimits, originalInteraction: discord.Interaction):
-        
-        super().__init__(timeout=None)
+        try:
+            logger.log(log="Creating InitBallot", type="debug", lead=BVIObject.electionID)   
+            super().__init__(timeout=None)
 
-        self.bot = bot
-        self.BVIObject = BVIObject
-        self.rateLimits = rateLimits
+            self.bot = bot
+            self.BVIObject = BVIObject
+            self.rateLimits = rateLimits
 
-        #sort relevant dict entries into easy to access variables
-        self.title = data['election']['title']
-        print(f"The title is {self.title}")
-        self.description = data['election']["description"]
-        self.candidates = data['election']['races'][0]['candidates']
-        self.titleTXT = [discord.Embed(title=self.title, description= self.description)]
+            #sort relevant dict entries into easy to access variables
+            self.title = data['election']['title']
+            self.description = data['election']["description"]
+            self.candidates = data['election']['races'][0]['candidates']
+            self.titleTXT = [discord.Embed(title=self.title, description= self.description)]
 
-        #Determine whether to use buttons or bullet points. Usually use buttons, unless a candidater is longer than 15 char or theres more than 20 cands
-        buttons: bool = True
-        if len(self.candidates) > 20:
-            buttons = False
+            #Determine whether to use buttons or bullet points. Usually use buttons, unless a candidater is longer than 15 char or theres more than 20 cands
+            buttons: bool = True
+            if len(self.candidates) > 20:
+                buttons = False
 
-        if buttons:
-            #set up candidates as items in the UI
-            self.candItems = []
-            for i in range(len(self.candidates)):
-                if len(self.candidates[i]['candidate_name']) > 30:
-                    buttons = False
-                    break
-                self.candItems.append(Button(label=self.candidates[i]['candidate_name']))
-                self.candItems[i].callback = self.button_callback
             if buttons:
-                for i in self.candItems:
-                    self.add_item(i)
-        if not buttons:
-            text = ""
-            for cand in self.candidates:
-                text = f"{text}\n● {cand['candidate_name']}"
-            embed = discord.Embed(description=text)
-            self.titleTXT.append(embed)
-            
+                #set up candidates as items in the UI
+                self.candItems = []
+                for i in range(len(self.candidates)):
+                    if len(self.candidates[i]['candidate_name']) > 30:
+                        buttons = False
+                        break
+                    self.candItems.append(Button(label=self.candidates[i]['candidate_name']))
+                    self.candItems[i].callback = self.button_callback
+                if buttons:
+                    for i in self.candItems:
+                        self.add_item(i)
+            if not buttons:
+                text = ""
+                for cand in self.candidates:
+                    text = f"{text}\n● {cand['candidate_name']}"
+                embed = discord.Embed(description=text)
+                self.titleTXT.append(embed)
+                
 
-        #set up cast vote button
-        self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
-        self.btn.callback= self.button_callback
-        self.add_item(self.btn)
-        self.results: discord.ui.button = Button(label="Click Here to See Current Leader", style=discord.ButtonStyle.primary, row=2)
-        self.results.callback = self.seeCurrentResults
-        self.add_item(self.results)
+            #set up cast vote button
+            self.btn: discord.ui.button = (Button(label="Click Here to Cast Vote", style=discord.ButtonStyle.primary, custom_id="InitButton", row=2))
+            self.btn.callback= self.button_callback
+            self.add_item(self.btn)
+            self.results: discord.ui.button = Button(label="Click Here to See Current Leader", style=discord.ButtonStyle.primary, row=2)
+            self.results.callback = self.seeCurrentResults
+            self.add_item(self.results)
 
-        #Ballots will be added to this list to avoid the "one user votes at a time" glitch.
-        #This class will check every 20 minutes for ballots that are either complete or timed out and clear them from memory
-        #TODO adjust this to use a dictionary
-        self.ballotViews: Ballot = []
-        def cleanBallotViews():
-            endCriteria = range(len(self.ballotViews))
-            for ballot in endCriteria:
-                if self.ballotViews[ballot].complete:
-                    del self.ballotViews[ballot]
-                    ballot -= 1
-                    endCriteria -= 1
-            #This solely exists for testing and will be removed in future PRs
-            print("Ballot Views")
-            print(self.ballotViews)
-        schedule.every(20).minutes.do(cleanBallotViews)
+            #Ballots will be added to this list to avoid the "one user votes at a time" glitch.
+            #This class will check every 20 minutes for ballots that are either complete or timed out and clear them from memory
+            #TODO adjust this to use a dictionary
+            self.ballotViews: Ballot = []
+            def cleanBallotViews():
+                endCriteria = range(len(self.ballotViews))
+                for ballot in endCriteria:
+                    if self.ballotViews[ballot].complete:
+                        del self.ballotViews[ballot]
+                        ballot -= 1
+                        endCriteria -= 1
+            schedule.every(20).minutes.do(cleanBallotViews)
+        except Exception as e:
+            logger.log(log=e, type="error", lead=BVIObject.electionID)
         
         
 
 
     #function to send Ballot. Technically all buttons can begin a ballot to avoid frusturations with users who dont understand STAR voting
     async def button_callback(self, interaction:discord.Interaction):
-        #respond immeditately, interactions fail if not responded to in 3 seconds
-        await deferInt(interaction, self.rateLimits)
-        alrVot = self.BVIObject.alreadyVoted(interaction.user.id)
-        if alrVot:
-            await self.rateLimits.wait()
-            await interaction.followup.send("You have already voted in this election", ephemeral=True)
-        elif not alrVot:
-            view = Ballot(self.bot, self.title, self.candidates, self.BVIObject, self.rateLimits)
-            self.ballotViews.append(view)
-            await self.rateLimits.wait()
-            msgID = await interaction.followup.send(view.description, view= self.ballotViews[-1], ephemeral=True)
-            self.ballotViews[-1].msgID = msgID.id
-        else:
-            await self.rateLimits.wait()
-            await interaction.followup.send("There was a server error. Please try again later.", ephemeral=True)
+        try:
+            #respond immeditately, interactions fail if not responded to in 3 seconds
+            await deferInt(interaction, self.rateLimits)
+            alrVot = self.BVIObject.alreadyVoted(interaction.user.id)
+            if alrVot:
+                await self.rateLimits.wait()
+                await interaction.followup.send("You have already voted in this election", ephemeral=True)
+            elif not alrVot:
+                view = Ballot(self.bot, self.title, self.candidates, self.BVIObject, self.rateLimits)
+                self.ballotViews.append(view)
+                await self.rateLimits.wait()
+                msgID = await interaction.followup.send(view.description, view= self.ballotViews[-1], ephemeral=True)
+                self.ballotViews[-1].msgID = msgID.id
+            else:
+                await self.rateLimits.wait()
+                await interaction.followup.send("There was a server error. Please try again later.", ephemeral=True)
+        except Exception as e:
+            logger.log(log=f"Error creating Ballot\n\nf{e}", type="error", lead=self.BVIObject.electionID)
     
     #Send ephemeral message with current leader
     async def seeCurrentResults(self, interaction:discord.Interaction):
-        await deferInt(interaction, self.rateLimits)
-        '''try:
-            imgID = self.BVIObject.createBar()
+        try:
+            await deferInt(interaction, self.rateLimits)
+            '''try:
+                imgID = self.BVIObject.createBar()
+            except Exception as e:
+                #secondLogger.log(f"This was a false ballot by {interaction.user}", True, False)
+                #secondLogger.log(e, True, False)
+                #secondLogger.log(self.BVIObject.resultsJSON, True, False)
+            score = f"graphTemp/2{imgID}.png"
+            runoff = f"graphTemp/1{imgID}.png"
+            files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]'''
+            text = f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n"
+            submitView = Submission(self.bot, text, self.BVIObject, None, self.rateLimits)
+            await self.rateLimits.wait()
+            msg = await interaction.followup.send(content=text, view=submitView, ephemeral=True)
+            submitView.msgID = msg.id
         except Exception as e:
-            #secondLogger.log(f"This was a false ballot by {interaction.user}", True, False)
-            #secondLogger.log(e, True, False)
-            #secondLogger.log(self.BVIObject.resultsJSON, True, False)
-        score = f"graphTemp/2{imgID}.png"
-        runoff = f"graphTemp/1{imgID}.png"
-        files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]'''
-        text = f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n"
-        submitView = Submission(self.bot, text, self.BVIObject, None, self.rateLimits)
-        await self.rateLimits.wait()
-        msg = await interaction.followup.send(content=text, view=submitView, ephemeral=True)
-        submitView.msgID = msg.id
+            logger.log(log=f"Error showing current results", type="error", lead=self.BVIObject.electionID)
 
     #Save data to database
     def saveToSQL(self, messageId: str, channelId: str) -> None:
-        database.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
-        database.connection.commit()
-        print("Committed to database")
+        try:
+            database.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
+            database.connection.commit()
+            logger.log(log="Committed to database", type="debug", lead=self.BVIObject.electionID)
+        except Exception as e:
+            logger.log(log=f"Error submitting to database\n\n{e}", type="error", lead=self.BVIObject.electionID)
 
 
 
@@ -481,7 +488,7 @@ class turnToBV(discord.ui.View):
         for i in range(len(answers)):
             answers[i] = getattr(answers[i].media, "text", None)
 
-        print(f"{question}\n{answers}\n{duration}")
+        logger.log(log=f"Turning poll into STAR poll{question}\n{answers}\n{duration}", type="debug", lead=question)
 
         Translator = BVI.BVWebTranslator()
         Translator.createElection(question, duration, self.message.author.id, answers)
