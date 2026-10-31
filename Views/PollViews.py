@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import datetime
 import time
 import schedule
+import asyncio
+import traceback
 
 import discord
 from discord import File
@@ -22,10 +24,10 @@ import sys; sys.stdout = sys.stderr
 load_dotenv()
 logger = PunkinLogging.logWrapper()
 database = sqlite3.connect(os.getenv('BOT_DATABASE_PATH'))
-database = database.cursor()
+cursor = database.cursor()
 #Time is never null, even when election expires, as a failsafe
-database.execute("CREATE TABLE IF NOT EXISTS InitBallots (id INTEGER PRIMARY KEY, messageID INTEGER NOT NULL, channelID INTEGER NOT NULL, electionID TEXT NOT NULL, time INTEGER NOT NULL)")
-
+cursor.execute("CREATE TABLE IF NOT EXISTS InitBallots (id INTEGER PRIMARY KEY, messageID INTEGER NOT NULL, channelID INTEGER NOT NULL, electionID TEXT NOT NULL, time INTEGER NOT NULL)")
+database.commit()
 
 #get data set up in a dictionary to prep for pollViews
 #takes a BVWebTranslator object and returns the relevant data from its JSON
@@ -50,12 +52,41 @@ class InitBallotTracker():
     def __init__(self):
         self.initBallots = {}
         self.counter = 1
+        #Are we currently checking for finished polls?
+        self.inCycle = False
 
     def addInitBallot(self, view):
-        num = self.counter
         self.counter += 1
+        num = self.counter
         self.initBallots[str(num)] = view
         return num
+    
+    async def checkFinish(self):
+        async def finishElection(key):
+            try:
+                if self.initBallots[key].channelId:
+                    await self.initBallots[key].completeElection()
+                    del self.initBallots[key]
+            except Exception as e:
+                logger.log(f"Attempted to complete an InitBallot but got this error: {e}", "error", lead=f"election ID: {self.initBallots[key].BVIObject.electionID}")
+                traceback.print_exc()
+        
+        #If it is currently scanning, wait for it to finish
+        if self.inCycle:
+            return
+        tasks = []
+        for key, value in self.initBallots.items():
+            if self.initBallots[key].BVIObject.checkForCompletion():
+                logger.log(f"Positioning election for completion in discord", type="debug", lead=f"{self.initBallots[key].BVIObject.electionID}")
+                tasks.append(asyncio.create_task(finishElection(key)))
+        logger.log(f"Completing positioned elections", type="debug")
+        asyncio.gather(*tasks, return_exceptions=True)
+        logger.log(f"Positioned elections completed in discord, if any, any errors printed above", type="debug")
+        
+
+        
+
+        
 
 #defer an interaction
 async def deferInt(interaction: discord.Interaction, rateLimits):
@@ -74,6 +105,10 @@ class InitBallot(discord.ui.View):
         try:
             logger.log(log="Creating InitBallot", type="debug", lead=BVIObject.electionID)   
             super().__init__(timeout=None)
+
+            #These will be set later by the saveToSQL
+            self.messageId: str = ""
+            self.channelId: str = ""
 
             self.bot = bot
             self.BVIObject = BVIObject
@@ -170,19 +205,42 @@ class InitBallot(discord.ui.View):
             score = f"graphTemp/2{imgID}.png"
             runoff = f"graphTemp/1{imgID}.png"
             files = [File(score, filename="score.png"), File(runoff, filename="runoff.png")]'''
-            text = f"The current leader is {self.BVIObject.winner}\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n"
+            self.BVIObject.updateResults()
+            text = f"# {self.title}\n## The current leader is {self.BVIObject.winner} and there are {self.BVIObject.numVotes} votes so far.\n\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details"
             submitView = Submission(self.bot, text, self.BVIObject, None, self.rateLimits)
             await self.rateLimits.wait()
             msg = await interaction.followup.send(content=text, view=submitView, ephemeral=True)
             submitView.msgID = msg.id
         except Exception as e:
-            logger.log(log=f"Error showing current results", type="error", lead=self.BVIObject.electionID)
+            logger.log(log=f"Error showing current results: {e}", type="error", lead=self.BVIObject.electionID)
+            traceback.print_exc()
+    
+    #Election closed 
+    #Replace own view with the current leader view, with some small alterations
+    #Send message with same view
+    async def completeElection(self):
+        try:
+            await self.rateLimits.wait()
+            msg: discord.Message = await self.bot.get_channel(self.channelId).fetch_message(self.messageId)
+            graphText = self.BVIObject.createASCIIBar()
+            msgContent = f"# The poll {self.title} is complete\n## The winner was {self.BVIObject.winner} and there were {self.BVIObject.numVotes} votes.\n\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n```{graphText}```"
+            endEmbed = discord.Embed()
+            await self.rateLimits.wait()
+            await msg.edit(content=msgContent, view=None, embeds=[])
+            await self.rateLimits.wait()
+            await msg.channel.send(msgContent)
+            cursor.execute(f"DELETE FROM InitBallots WHERE messageID = {int(self.messageId)} AND channelID = {int(self.channelId)}")
+            database.commit()
+        except Exception as e:
+            traceback.print_exc()
 
     #Save data to database
     def saveToSQL(self, messageId: str, channelId: str) -> None:
         try:
-            database.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
-            database.connection.commit()
+            self.messageId = messageId
+            self.channelId = channelId
+            cursor.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
+            database.commit()
             logger.log(log="Committed to database", type="debug", lead=self.BVIObject.electionID)
         except Exception as e:
             logger.log(log=f"Error submitting to database\n\n{e}", type="error", lead=self.BVIObject.electionID)
@@ -389,7 +447,7 @@ class Ballot(discord.ui.View):
                 text = text + (f"•{self.candidates[i]['candidate_name']}: {self.save.scores[i]} \n")
             self.BVIObject.updateResults()
             URL = f"https://bettervoting.com/{self.BVIObject.electionID}/results"
-            text = f"{text}\n\nThe current leader is {self.BVIObject.winner}\n\nSee more information at {URL}"
+            text = f"# {self.title}\n## The current leader is {self.BVIObject.winner} and there are {self.BVIObject.numVotes} votes so far.\n\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details"
         elif not switch:
             text = "You have already voted in this election"
         else:

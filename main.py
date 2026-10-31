@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 import crontab
+import datetime
 
 import sqlite3
 
@@ -101,6 +102,7 @@ if __name__ == "__main__":
         #start doing loops to check for rate limiting
         bot.loop.create_task(rateLimitLoop())
         bot.loop.create_task(databaseFailsafeLoop())
+        bot.loop.create_task(checkInitBallots())
         await rateLimits.wait()
         await bot.change_presence(status= discord.Status.invisible)
         #exists as a workaround since git doesnt take empty dirs
@@ -128,6 +130,8 @@ if __name__ == "__main__":
                     index = await pollLink(None, column3)
                     await rateLimits.wait()
                     await msg.edit(view=initBallotViews.initBallots[index])
+                    initBallotViews.initBallots[index].messageID = column1
+                    initBallotViews.initBallots[index].channelID = column2
                 except Exception as e:
                     logger.log(log="message not found, likely deleted by users", type="debug", lead = column3)
 
@@ -162,7 +166,7 @@ if __name__ == "__main__":
         logger.log("Bot is fully ready. Appearing online")
     
     
-            
+  
     #run bot and database failsafe
     def databaseFailsafe():
         #TODO This throws an error. It cannot find the file. May be a directory issue
@@ -173,7 +177,7 @@ if __name__ == "__main__":
             await asyncio.sleep(43200)
     #run scheduled tasks
     async def rateLimitLoop():
-        logger.log("Rate Limit Loop Started")
+        logger.log("Rate Limit Loop Started", type="debug")
         while True:
             try:
                 #schedule.run_pending()
@@ -182,5 +186,23 @@ if __name__ == "__main__":
             except Exception as e:
                 logger.log(log = e, type = "error")
         raise Exception
+    #Run a loop to check initBallots for completion
+    async def checkInitBallots():
+        logger.log("Check InitBallots Loop Started", "debug")
+        #If the loop takes longer than this allocated log it, as we should investigate what is taking so long
+        maxAllocatedTime = datetime.timedelta(seconds=5)
+        while True:
+            #try:
+            timeBefore = datetime.datetime.now()
+            await initBallotViews.checkFinish()
+            timeAfter = datetime.datetime.now()
+            diff = timeAfter - timeBefore
+            if diff > maxAllocatedTime:
+                logger.log(f"InitBallotTracker took exceedingly long to clear completed ballots. Took ({diff}) to complete. This could be a discord bot or a bettervoting.com issue", "error")
+            #except Exception as e:
+            await asyncio.sleep(1)
+
     #run bot
     bot.run(TOKEN)
+    logger.log("THIS MEANS THAT bot.run() REACHED ITS END. A CRITICAL ERROR HAS OCCURED AND MEANS THE BOT IS OFFLINE", "error")
+    raise Exception

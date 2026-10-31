@@ -9,6 +9,7 @@ import hashlib
 import datetime
 import random
 import string
+import traceback
 from multiprocessing import Process
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -26,6 +27,7 @@ class BVWebTranslator:
         self.electJSON = None
         self.resultsJSON = None
         self.winner = ""
+        self.numVotes = 0
         self.token = None
         self.key = None
         self.URL = ""
@@ -79,7 +81,12 @@ class BVWebTranslator:
         logger.log(log=f"Updated Election Data\n\nvars resp{vars(resp)}", type="debug", lead=self.electionID)
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
+        #Count the number of votess
+        self.numVotes = (self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['winner_votes']) + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['runner_up_votes'] + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']
         self.prepCands()
+        resp = requests.get(self.URL)
+        #creates dictionary with all election data
+        self.electJSON = json.loads(resp.text)
 
     #Creating an election
     def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
@@ -134,6 +141,25 @@ class BVWebTranslator:
         #assign self the election just created
         self.assignElection(self.electionID)
         logger.log(log=f"Election {question} created successfully\n\n{content}", type="debug", lead=self.electionID)
+    
+    #Is this election completed
+    #See if the JSON claims the election is done, if so check the website
+    #We do it this way so that the website isn't bombarded with hundreds of pings every second
+    def checkForCompletion(self):
+        #The election has no end time, dont close it
+        if self.electJSON["election"]["end_time"] == None:
+            return False
+        endTime = datetime.datetime.fromisoformat(self.electJSON["election"]["end_time"])
+        state = self.electJSON["election"]["state"]
+        #According to current data the election should be closed. See if anything changed by asking the website for updates
+        if datetime.datetime.now(datetime.timezone.utc) >= endTime or state == "closed":
+            self.updateResults()
+            if datetime.datetime.now(datetime.timezone.utc) >= endTime or state == "closed":
+                return True
+        return False
+
+
+
         
 
 
