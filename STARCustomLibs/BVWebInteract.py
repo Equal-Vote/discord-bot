@@ -81,8 +81,15 @@ class BVWebTranslator:
         logger.log(log=f"Updated Election Data\n\nvars resp{vars(resp)}", type="debug", lead=self.electionID)
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
-        #Count the number of votess
-        self.numVotes = (self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['winner_votes']) + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['runner_up_votes'] + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']
+        #Count the number of votes
+        #Sometimes results come back in slightly different ways
+        try:
+            self.numVotes = (self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['winner_votes']) + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['runner_up_votes'] + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']
+        except KeyError as e:
+            self.numVotes = self.resultsJSON['results'][0]['summaryData']['nTallyVotes']
+        except Exception as e:
+            logger.log(str(e), "error", self.electionID)
+        
         self.prepCands()
         resp = requests.get(self.URL)
         #creates dictionary with all election data

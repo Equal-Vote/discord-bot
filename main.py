@@ -192,15 +192,17 @@ if __name__ == "__main__":
         #If the loop takes longer than this allocated log it, as we should investigate what is taking so long
         maxAllocatedTime = datetime.timedelta(seconds=5)
         while True:
-            #try:
-            timeBefore = datetime.datetime.now()
-            await initBallotViews.checkFinish()
-            timeAfter = datetime.datetime.now()
-            diff = timeAfter - timeBefore
-            if diff > maxAllocatedTime:
-                logger.log(f"InitBallotTracker took exceedingly long to clear completed ballots. Took ({diff}) to complete. This could be a discord bot or a bettervoting.com issue", "error")
-            #except Exception as e:
-            await asyncio.sleep(1)
+            try:
+                timeBefore = datetime.datetime.now()
+                await initBallotViews.checkFinish()
+                timeAfter = datetime.datetime.now()
+                diff = timeAfter - timeBefore
+                if diff > maxAllocatedTime:
+                    logger.log(f"InitBallotTracker took exceedingly long to clear completed ballots. Took ({diff}) to complete. This could be a discord bot or a bettervoting.com issue", "error")
+                await asyncio.sleep(1)
+            except Exception as e:
+                logger.log(str(e), "error")
+            
 
     #run bot
     bot.run(TOKEN)
