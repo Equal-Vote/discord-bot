@@ -64,6 +64,7 @@ class InitBallotTracker():
     async def checkFinish(self):
         async def finishElection(key):
             try:
+                logger.log(f"The channedId is {self.initBallots[key].channelId}", lead=self.initBallots[key].BVIObject.electionID)
                 if self.initBallots[key].channelId:
                     await self.initBallots[key].completeElection()
                     del self.initBallots[key]
@@ -80,7 +81,7 @@ class InitBallotTracker():
                 logger.log(f"Positioning election for completion in discord", type="debug", lead=f"{self.initBallots[key].BVIObject.electionID}")
                 tasks.append(asyncio.create_task(finishElection(key)))
         logger.log(f"Completing positioned elections", type="debug")
-        asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         logger.log(f"Positioned elections completed in discord, if any, any errors printed above", type="debug")
         
 
