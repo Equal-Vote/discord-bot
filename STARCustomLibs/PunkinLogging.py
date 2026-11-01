@@ -1,32 +1,25 @@
-#This is to help with some kinds of error logging
+import logging
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 
-class errorLogger():
-    def __init__(self, path):
-        
-        self.path = path
-        #create file now so it doenst delay error logging later
-        self.log("Creating PunkinLog file", False, False)
+#small class for making logging easier and consistent
 
-    #print and log text or error
-    def log(self, text, error: bool, detailedMode: bool) -> None:
-        try:
-            if detailedMode:
-                printText = vars(text)
-            else:
-                printText = text
-            if error:
-                tag = "ERROR"
-            else:
-                tag = "Printed"
-
-            finalText = f'\n[{datetime.now()}]: {tag} logged with PunkinLogging: {printText}'
-
-            print(finalText)
-            with open(self.path, 'a') as file:
-                file.write(finalText)
-        except Exception as e:
-            print("Punkin logging tried to print this:")
-            print(text)
-            print("But ran into this error:")
-            print(e)
+class logWrapper():
+    def __init__(self):
+        load_dotenv()
+        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(filename = os.getenv("BOT_LOG_PATH"), encoding = "utf-8", level = logging.DEBUG)
+    
+    #Is there a lead (such as ballot ID), whats the main focus of your logging event, and what type (info, warn, etc)
+    def log(self, log: str = "", type: str = "info", lead: str = ""):
+        content = f"[{datetime.now()}]{lead}:{log}"
+        print(content)
+        if type == "info":
+            self.logger.info(content)
+        elif type == "debug":
+            self.logger.debug(content)
+        elif type == "warning":
+            self.logger.warning(content)
+        elif type == "error":
+            self.logger.error(content)

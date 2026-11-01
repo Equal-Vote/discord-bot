@@ -9,21 +9,25 @@ import hashlib
 import datetime
 import random
 import string
+import traceback
 from multiprocessing import Process
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+
+from STARCustomLibs import PunkinLogging
 
 #generate a truly random 32 byte key for secure tokens
 def randomKey():
     return secrets.token_hex(32)
 
-
+logger = PunkinLogging.logWrapper()
 
 class BVWebTranslator:
     def __init__(self):
         self.electJSON = None
         self.resultsJSON = None
         self.winner = ""
+        self.numVotes = 0
         self.token = None
         self.key = None
         self.URL = ""
@@ -54,7 +58,7 @@ class BVWebTranslator:
     #Assign this object an election, should only be used once per object
     def assignElection(self, electionID: str) -> None:
         if not self.electJSON == None:
-            print("ERROR: assignElection called but election already assigned to this object")
+            logger.log(log = "ERROR: assignElection called but election already assigned to this object", type="error", lead=self.electionID)
             return
         #creates URL with electionID created at bettervoting.com
         self.electionID = electionID
@@ -62,25 +66,38 @@ class BVWebTranslator:
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
         self.electJSON = json.loads(electResp.text)
-        print("elect JSON")
-        print(self.electJSON)
+        logger.log(log="Created election", type="debug", lead = self.electionID)
+        logger.log(log=self.electJSON, type="debug", lead=self.electionID)
     #Get election JSON file
     def getElection(self) -> dict:
         if self.electJSON == None:
-            print("ERROR: getElection called but no election assigned to this object")
+            logger.log(log="ERROR: getElection called but no election assigned to this object", type="debug", lead=self.electionID)
         else:
             return self.electJSON
     #update results
     def updateResults(self) -> None:
         url = f"{self.API}/ElectionResult/{self.electionID}"
         resp = requests.get(url)
-        print(f"vars resp{vars(resp)}")
+        logger.log(log=f"Updated Election Data\n\nvars resp{vars(resp)}", type="debug", lead=self.electionID)
         self.resultsJSON = json.loads(resp.text)
         self.winner = self.resultsJSON['results'][0]['elected'][0]['name']
+        #Count the number of votes
+        #Sometimes results come back in slightly different ways
+        try:
+            self.numVotes = (self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['winner_votes']) + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['runner_up_votes'] + self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']
+        except KeyError as e:
+            self.numVotes = self.resultsJSON['results'][0]['summaryData']['nTallyVotes']
+        except Exception as e:
+            logger.log(str(e), "error", self.electionID)
+        
         self.prepCands()
+        resp = requests.get(self.URL)
+        #creates dictionary with all election data
+        self.electJSON = json.loads(resp.text)
 
     #Creating an election
     def createElection(self, question: str, endTime: datetime, userID: str, candidates: list) -> None:
+        logger.log(log="Creating an election. ElectionID doesnt exist yet", type="debug", lead=question)
         #URL for creating election
         url = f"{self.API}/Elections"
         self.electionID = self.randomChars(6)
@@ -123,13 +140,33 @@ class BVWebTranslator:
 
         #send payload
         resp = requests.post(url=url, json= payload)
-        print(vars(resp))
+        content = vars(resp)
         resp = resp.json()
         #TODO account for fail sends
         
         self.electionID = resp['election']['election_id']
         #assign self the election just created
         self.assignElection(self.electionID)
+        logger.log(log=f"Election {question} created successfully\n\n{content}", type="debug", lead=self.electionID)
+    
+    #Is this election completed
+    #See if the JSON claims the election is done, if so check the website
+    #We do it this way so that the website isn't bombarded with hundreds of pings every second
+    def checkForCompletion(self):
+        #The election has no end time, dont close it
+        if self.electJSON["election"]["end_time"] == None:
+            return False
+        endTime = datetime.datetime.fromisoformat(self.electJSON["election"]["end_time"])
+        state = self.electJSON["election"]["state"]
+        #According to current data the election should be closed. See if anything changed by asking the website for updates
+        if datetime.datetime.now(datetime.timezone.utc) >= endTime or state == "closed":
+            self.updateResults()
+            if datetime.datetime.now(datetime.timezone.utc) >= endTime or state == "closed":
+                return True
+        return False
+
+
+
         
 
 
@@ -156,11 +193,13 @@ class BVWebTranslator:
     #returns False if user already voted, True on success, and None on an error
     def submitBallot(self, userID: str, scores: list) -> bool:
         #if the user already voted, return False. The vote should not be counted
+        logger.log(log=f"{userID} is submitting a ballot", type="debug", lead=self.electionID)
         alrVote = self.alreadyVoted(userID)
-        print(f"alrvote func said {alrVote}")
         if alrVote:
+            logger.log(log=f"{userID} already voted", type="debug", lead=self.electionID)
             return False
         elif alrVote == None:
+            logger.log(log=f"{userID} ran into an error in the alrVote function", type="error", lead=self.electionID)
             return None
         
         #if the user didnt already vote, prepare their ballot for submission to BV
@@ -230,8 +269,7 @@ class BVWebTranslator:
             categories.append(candidate[0])
             votes.append(candidate[1])
         
-        print("Results")
-        print(self.resultsJSON)
+        logger.log(log=f"Results \n\n{self.resultsJSON}", type="debug", lead=self.electionID)
         
         #This gets the relevant data and sorts it for the graph
         #Be careful when changing this, the API will change how some of this data is ordered. It is currently set up to use data whose order doesnt move
@@ -257,7 +295,82 @@ class BVWebTranslator:
 
     #Create an ASCII bar graph instead to reduce load times
     def createASCIIBar(self) -> str:
-        pass
+        logger.log(log="Creating ASCII Graph", type="debug", lead=self.electionID)
+        #update results, the prepare data for graphs
+        self.updateResults()
+        categories = []
+        votes = []
+        for candidate in self.prepCands():
+            categories.append(candidate[0])
+            votes.append(candidate[1])
+        categories.reverse()
+        votes.reverse()
+
+        logger.log(log=f"Graph Data\n\n{categories}\n\n", type="debug", lead=self.electionID)
+        
+        #This gets the relevant data and sorts it for the graph
+        #Be careful when changing this, the API will change how some of this data is ordered. It is currently set up to use data whose order doesnt move
+        winID = self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['id']
+        runID = self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['id']
+        finalists = [self.winner, self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['name'], "Equal Support"]
+        finalistVotes =  [self.resultsJSON['results'][0]['roundResults'][0]['winners'][0]['votesPreferredOver'][runID], self.resultsJSON['results'][0]['roundResults'][0]['runner_up'][0]['votesPreferredOver'][winID], self.resultsJSON['results'][0]['roundResults'][0]['logs'][1]['equal_votes']]
+        
+        maxVotes = votes[0]
+        #Make a single bar for the graph
+        def makeBar(maximum, currentNum, name):
+            #If name is short enough, add spaces to make it to maxNameLen
+            #Else limit to maxNameLen and add "..." to end
+            maxNameLen = 8
+            if len(name) <= maxNameLen:
+                spaces = ""
+                for i in range(maxNameLen - len(name)):
+                    spaces = f"{spaces} "
+                barName = f"{name}{spaces}"
+            else:
+                barName = f"{name[:(maxNameLen - 3)]}..."
+
+            #Run math to determine || to :: ratio
+            #Theres 20 characters in the actual bar, this determines how much is empty
+            barLength = 20
+            num = maximum
+            secNum = currentNum
+            hold = secNum/num
+            hold = hold * 100
+            rounded = 5 * round(hold/5)
+            barCount = rounded/5
+            barCount = int(barCount)
+
+            #Make the actual bar
+            bar = ""
+            for i in range(barCount):
+                bar = f"{bar}="
+            for i in range((barLength - barCount)):
+                bar = f"{bar}-"
+            bar = f"{bar} {currentNum}"
+            
+            #Make string maxNameLen... ] bar (num)
+            return f"{barName}]{bar}"
+
+        text1 = "First, the scores are tallied\n\n"
+        text2 = "Next, the two top scorers advance to the runoff round. Each voter's vote goes to the finalist they scored highest\n\n"
+        text3 = "This way people can vote their conscience instead of the lesser of two evils, and every vote gets a say!\n\n"
+
+        scoreBars = []
+        for i in range(len(categories)):
+            scoreBars.append(makeBar(maxVotes, votes[i], categories[i]))
+        runoffBars = []
+        for i in range(len(finalists)-1):
+            runoffBars.append(makeBar(finalistVotes[0], finalistVotes[i], finalists[i]))
+        runoffBars.append(makeBar(finalistVotes[0], finalistVotes[2], "Equal"))
+        
+        finalText = text1
+        for i in scoreBars:
+            finalText = f"{finalText}{i}\n"
+        finalText = f"{finalText}\n\n{text2}"
+        for i in runoffBars:
+            finalText = f"{finalText}{i}\n"
+        finalText = f"{finalText}\n\n{text3}"
+        return finalText
 
         
         

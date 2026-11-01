@@ -5,3 +5,4 @@ pyjwt
 schedule
 crontab
 pywaffle
+logging
