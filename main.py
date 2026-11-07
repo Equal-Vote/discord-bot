@@ -128,10 +128,9 @@ if __name__ == "__main__":
                     await rateLimits.wait()
                     msg = await bot.get_channel(column2).fetch_message(column1)
                     index = await pollLink(None, column3)
+                    initBallotViews.initBallots[index].setDiscordIds(column1, column2)
                     await rateLimits.wait()
                     await msg.edit(view=initBallotViews.initBallots[index])
-                    initBallotViews.initBallots[index].messageID = column1
-                    initBallotViews.initBallots[index].channelID = column2
                 except Exception as e:
                     logger.log(log="message not found, likely deleted by users", type="debug", lead = column3)
                     #TODO delete the message from database when this happens. Not adding now because the database will be switched to postgres
@@ -139,7 +138,7 @@ if __name__ == "__main__":
             tasks = []
             for i in range(len(rows)):
                 try:
-                    logger.log(log = f"{rows[i][2]}\n\n{rows[i][1]}", type="debug", lead = rows[i][3])
+                    logger.log(log = f"The channel and message Ids are {rows[i][2]}\n\n{rows[i][1]}", type="debug", lead = rows[i][3])
                     tasks.append(asyncio.create_task(replaceInitBallot(rows[i][1], rows[i][2], rows[i][3])))
                     #Complete tasks in batches of 40
                     if len(tasks) >= 40:

@@ -242,13 +242,18 @@ class InitBallot(discord.ui.View):
     #Save data to database
     def saveToSQL(self, messageId: str, channelId: str) -> None:
         try:
-            self.messageId = messageId
-            self.channelId = channelId
+            self.setDiscordIds(messageId, channelId)
             cursor.execute("INSERT INTO InitBallots (messageID, channelID, electionID, time) VALUES (?, ?, ?, ?)", (int(messageId), int(channelId), self.BVIObject.electionID, int(time.time())))
             database.commit()
             logger.log(log="Committed to database", type="debug", lead=self.BVIObject.electionID)
         except Exception as e:
             logger.log(log=f"Error submitting to database\n\n{e}", type="error", lead=self.BVIObject.electionID)
+    #Use this function to set ids. The channel Id should always come second to prevent edge cases, since initBallotTracker checks if a channel id is set to see if an InitBallot is ready
+    def setDiscordIds(self, messageId: str, channedId: str):
+        logger.log(f"Setting {messageId} and {channedId}", "debug", lead=self.BVIObject.electionID)
+        self.messageId = messageId
+        self.channelId = channedId
+        logger.log(f"Set {messageId} and {channedId}", "debug", lead=self.BVIObject.electionID)
 
 
 
