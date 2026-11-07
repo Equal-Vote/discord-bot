@@ -69,6 +69,8 @@ class InitBallotTracker():
                     if self.initBallots[key].channelId:
                         await self.initBallots[key].completeElection()
                         del self.initBallots[key]
+                    else:
+                        cursor.execute('')
                 else:
                     logger.log("Election not actually closed, found after updating results. No action taken", "debug", lead=self.initBallots[key].BVIObject.electionID)
             except Exception as e:
@@ -228,7 +230,8 @@ class InitBallot(discord.ui.View):
             await self.rateLimits.wait()
             msg: discord.Message = await self.bot.get_channel(self.channelId).fetch_message(self.messageId)
             graphText = self.BVIObject.createASCIIBar()
-            msgContent = f"# The poll {self.title} is complete\n## The winner was {self.BVIObject.winner} and there were {self.BVIObject.numVotes} votes.\n\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n```{graphText}```"
+            donationLink = "*Equal Vote is a 501c3 non-profit that relies on community donations to keep projects like this discord bot afloat. Please consider supporting Equal Vote's mission to bring better voting for a better world at https://www.equalvote.org/donate. Any amount, big or small, is deeply appreciated*"
+            msgContent = f"# The poll {self.title} is complete\n## The winner was {self.BVIObject.winner} and there were {self.BVIObject.numVotes} votes.\n\nSee https://bettervoting.com/{self.BVIObject.electionID}/results for more details\n\n```{graphText}```\n\n{donationLink}"
             endEmbed = discord.Embed()
             await self.rateLimits.wait()
             await msg.edit(content=msgContent, view=None, embeds=[])
