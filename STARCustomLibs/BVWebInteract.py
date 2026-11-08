@@ -154,9 +154,13 @@ class BVWebTranslator:
     #If so, you should call CheckForCompletionCertain
     #We do it this way so that the website isn't bombarded with hundreds of pings every second
     def checkForCompletionUncertain(self):
-        state = self.electJSON["election"]["state"]
         #According to current data the election should be closed.
-        if state == "closed":
+        endTime = self.electJSON["election"]["end_time"]
+        if endTime == None:
+            return False
+        endTime = datetime.datetime.fromisoformat(endTime)
+        state = self.electJSON["election"]["state"]
+        if datetime.datetime.now(datetime.timezone.utc) >= endTime or state == "closed":
             return True
         return False
     def checkForCompletionCertain(self):
@@ -170,11 +174,7 @@ class BVWebTranslator:
 
 
 
-        
-
-
-
-
+    
     #functions for submitting ballots
     #did this user already vote
     #note this isnt inter platform. There is an exploit where a user could vote on the website then again on another platform
