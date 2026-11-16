@@ -15,6 +15,7 @@ import crontab
 import datetime
 
 import sqlite3
+import psycopg2
 
 from STARCustomLibs import BVWebInteract as BVI, PunkinLogging, rateLimitCheck
 from Views import PollViews
@@ -112,8 +113,12 @@ if __name__ == "__main__":
         logger.log("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
         #Make previous InitBallot views functional
-        if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
-            database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
+        try:
+            try:
+                os.path.exists(os.getenv("BOT_DATABASE_PATH"))
+            except:
+                logger.log(log="No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH", type="warning")
+            database = psycopg2.connect(os.getenv("BOT_DATABASE_PATH"))
             db = database.cursor()
             db.execute("SELECT * FROM InitBallots")
             rows = db.fetchall()
@@ -148,8 +153,8 @@ if __name__ == "__main__":
                     logger.log(log="message not found, likely deleted by users", type = "debug", lead = rows[i][3])
             await asyncio.gather(*tasks, return_exceptions=True)
             logger.log("Persistent views synced. Prior InitBallots are usable")   
-        else:
-            logger.log(log="No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH", type="warning")
+        except Exception as e:
+            logger.log(log=f"Error occured while setting up previous elections during deployment: \n {e}", type="error")
         
         #set up slash commands
         logger.log("Syncing slash commands")
