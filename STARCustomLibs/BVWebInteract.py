@@ -65,6 +65,9 @@ class BVWebTranslator:
         self.URL = self.API + "/Election/" + self.electionID
         electResp = requests.get(self.URL)
         #creates dictionary with all election data
+        if electResp.status_code != 200:
+            logger.log(f"Failed to pull election", "error", self.electionID)
+            raise Exception
         self.electJSON = json.loads(electResp.text)
         logger.log(log="Created election", type="debug", lead = self.electionID)
         logger.log(log=self.electJSON, type="debug", lead=self.electionID)

@@ -137,7 +137,7 @@ if __name__ == "__main__":
                     await rateLimits.wait()
                     await msg.edit(view=initBallotViews.initBallots[index])
                 except Exception as e:
-                    logger.log(log="message not found, likely deleted by users", type="debug", lead = column3)
+                    logger.log(log=f"message not found, likely deleted by users. Specific exception is {e}", type="debug", lead = column3)
                     #TODO delete the message from database when this happens. Not adding now because the database will be switched to postgres
 
             tasks = []
@@ -204,9 +204,9 @@ if __name__ == "__main__":
                 diff = timeAfter - timeBefore
                 if diff > maxAllocatedTime:
                     logger.log(f"InitBallotTracker took exceedingly long to clear completed ballots. Took ({diff}) to complete. This could be a discord bot or a bettervoting.com issue", "error")
-                await asyncio.sleep(1)
             except Exception as e:
                 logger.log(str(e), "error")
+            await asyncio.sleep(1)
             
 
     #run bot

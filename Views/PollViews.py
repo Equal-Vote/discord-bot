@@ -175,6 +175,7 @@ class InitBallot(discord.ui.View):
             schedule.every(20).minutes.do(cleanBallotViews)
         except Exception as e:
             logger.log(log=e, type="error", lead=BVIObject.electionID)
+            raise Exception
         
         
 
