@@ -5,3 +5,5 @@ pyjwt
 schedule
 crontab
 pywaffle
+logging
+psycopg2-binary

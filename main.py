@@ -12,8 +12,10 @@ import subprocess
 import threading
 import time
 import crontab
+import datetime
 
 import sqlite3
+import psycopg2
 
 from STARCustomLibs import BVWebInteract as BVI, PunkinLogging, rateLimitCheck
 from Views import PollViews
@@ -23,7 +25,8 @@ from Views import PollViews
 #TODO implement error handling
 #TODO deintegrate DiscordBotAssist
 if __name__ == "__main__":
-    print("Preparing Bot")
+    logger = PunkinLogging.logWrapper()
+    logger.log("Deploying Bot. Beginning startup")
     #create bot 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -73,7 +76,7 @@ if __name__ == "__main__":
         elections[electionid] = Translator
         
         #With election object created, create view and send message for ballot casting. Then save the data to the database to be pulled after redeploy
-        view = PollViews.InitBallot(bot, elections[electionid].electJSON, Translator, rateLimits)
+        view = PollViews.InitBallot(bot, elections[electionid].electJSON, Translator, rateLimits, interaction)
         index = initBallotViews.addInitBallot(view)
         return str(index)
 
@@ -100,17 +103,22 @@ if __name__ == "__main__":
         #start doing loops to check for rate limiting
         bot.loop.create_task(rateLimitLoop())
         bot.loop.create_task(databaseFailsafeLoop())
+        bot.loop.create_task(checkInitBallots())
         await rateLimits.wait()
         await bot.change_presence(status= discord.Status.invisible)
         #exists as a workaround since git doesnt take empty dirs
         if not os.path.exists("graphTemp"):
             os.makedirs("graphTemp")
-        print("Logged into discord. Appearing offline until ready.")
-        print("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
+        logger.log("Logged into discord. Appearing offline until ready.")
+        logger.log("Syncing persistent views. InitBallot views from before this deployment will be unusable until this is done")
         #TODO safeguard against rate limiting
         #Make previous InitBallot views functional
-        if os.path.exists(os.getenv("BOT_DATABASE_PATH")):
-            database = sqlite3.connect(os.getenv("BOT_DATABASE_PATH"))
+        try:
+            try:
+                os.path.exists(os.getenv("BOT_DATABASE_PATH"))
+            except:
+                logger.log(log="No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH", type="warning")
+            database = psycopg2.connect(os.getenv("BOT_DATABASE_PATH"))
             db = database.cursor()
             db.execute("SELECT * FROM InitBallots")
             rows = db.fetchall()
@@ -125,46 +133,48 @@ if __name__ == "__main__":
                     await rateLimits.wait()
                     msg = await bot.get_channel(column2).fetch_message(column1)
                     index = await pollLink(None, column3)
+                    initBallotViews.initBallots[index].setDiscordIds(column1, column2)
                     await rateLimits.wait()
                     await msg.edit(view=initBallotViews.initBallots[index])
                 except Exception as e:
-                    print("message not found, likely deleted by users")
+                    logger.log(log=f"message not found, likely deleted by users. Specific exception is {e}", type="debug", lead = column3)
+                    #TODO delete the message from database when this happens. Not adding now because the database will be switched to postgres
 
             tasks = []
             for i in range(len(rows)):
                 try:
-                    print(rows[i][2])
-                    print(rows[i][1])
+                    logger.log(log = f"The channel and message Ids are {rows[i][2]}\n\n{rows[i][1]}", type="debug", lead = rows[i][3])
                     tasks.append(asyncio.create_task(replaceInitBallot(rows[i][1], rows[i][2], rows[i][3])))
                     #Complete tasks in batches of 40
                     if len(tasks) >= 40:
                         await asyncio.gather(*tasks, return_exceptions=True)
                         tasks = []
                 except:
-                    print("message not found, likely deleted by users")
+                    logger.log(log="message not found, likely deleted by users", type = "debug", lead = rows[i][3])
             await asyncio.gather(*tasks, return_exceptions=True)
-            print("Persistent views synced. Prior InitBallots are usable")   
-        else:
-            print("No database found. If this is the first deployment, this is normal. If not, please check your environment variable BOT_DATABASE_PATH")
+            logger.log("Persistent views synced. Prior InitBallots are usable")   
+        except Exception as e:
+            logger.log(log=f"Error occured while setting up previous elections during deployment: \n {e}", type="error")
         
         #set up slash commands
-        print("Syncing slash commands")
+        logger.log("Syncing slash commands")
         try:
             #await rateLimits.wait()
             await bot.tree.sync()
-            print("Slash commands synced")
+            logger.log("Slash commands synced")
         except Exception as e:
-            print(f"Error syncing slash commands: {e}")
+            logger.log(f"Error syncing slash commands: {e}", type = "error")
             exit(1)
         
         await rateLimits.wait()
         await bot.change_presence(status=discord.Status.online)
-        print("Bot is fully ready. Appearing online")
+        logger.log("Bot is fully ready. Appearing online")
     
     
-            
+  
     #run bot and database failsafe
     def databaseFailsafe():
+        #TODO This throws an error. It cannot find the file. May be a directory issue
         subprocess.run(["./databaseFailsafe"])
     async def databaseFailsafeLoop():
         while True:
@@ -172,14 +182,34 @@ if __name__ == "__main__":
             await asyncio.sleep(43200)
     #run scheduled tasks
     async def rateLimitLoop():
-        print("loop started")
+        logger.log("Rate Limit Loop Started", type="debug")
         while True:
             try:
                 #schedule.run_pending()
                 rateLimits.tickDown()
                 await asyncio.sleep(rateLimits.decrementAmount)
             except Exception as e:
-                print(e)
+                logger.log(log = e, type = "error")
         raise Exception
+    #Run a loop to check initBallots for completion
+    async def checkInitBallots():
+        logger.log("Check InitBallots Loop Started", "debug")
+        #If the loop takes longer than this allocated log it, as we should investigate what is taking so long
+        maxAllocatedTime = datetime.timedelta(seconds=5)
+        while True:
+            try:
+                timeBefore = datetime.datetime.now()
+                await initBallotViews.checkFinish()
+                timeAfter = datetime.datetime.now()
+                diff = timeAfter - timeBefore
+                if diff > maxAllocatedTime:
+                    logger.log(f"InitBallotTracker took exceedingly long to clear completed ballots. Took ({diff}) to complete. This could be a discord bot or a bettervoting.com issue", "error")
+            except Exception as e:
+                logger.log(str(e), "error")
+            await asyncio.sleep(1)
+            
+
     #run bot
     bot.run(TOKEN)
+    logger.log("THIS MEANS THAT bot.run() REACHED ITS END. A CRITICAL ERROR HAS OCCURED AND MEANS THE BOT IS OFFLINE", "error")
+    raise Exception
